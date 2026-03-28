@@ -146,18 +146,27 @@
         var name = full_name;
 
         var btn = form.querySelector('button[type="submit"]');
+        var originalLabel = btn.dataset.origLabel || btn.textContent;
+        btn.dataset.origLabel = originalLabel;
         btn.disabled = true;
+        btn.textContent = 'Создаю...';
 
         if (!email || !password) {
-          alert('Email и пароль обязательны');
+          msg.className = 'client-msg error';
+          msg.textContent = 'Email и пароль обязательны.';
+          msg.style.display = 'block';
           btn.disabled = false;
+          btn.textContent = originalLabel;
           return;
         }
 
         const { data, error } = await supabase.auth.signUp({ email: email, password: password });
         if (error) {
-          alert(error.message);
+          msg.className = 'client-msg error';
+          msg.textContent = error.message || 'Ошибка регистрации';
+          msg.style.display = 'block';
           btn.disabled = false;
+          btn.textContent = originalLabel;
           return;
         }
 
@@ -165,8 +174,11 @@
         const user = data.user ?? data.session?.user ?? data;
 
         if (!user || !user.id) {
-          alert('Не удалось получить id пользователя после регистрации.');
+          msg.className = 'client-msg error';
+          msg.textContent = 'Не удалось получить id пользователя после регистрации.';
+          msg.style.display = 'block';
           btn.disabled = false;
+          btn.textContent = originalLabel;
           return;
         }
 
@@ -180,15 +192,22 @@
         }]);
 
         if (profileError) {
-          alert(profileError.message || 'Ошибка сохранения профиля');
+          msg.className = 'client-msg error';
+          msg.textContent = 'Пользователь создан, но профиль не сохранён: ' + (profileError.message || '');
+          msg.style.display = 'block';
         } else {
-          alert('Регистрация успешна!');
           msg.className = 'client-msg ok';
           msg.textContent = 'Регистрация успешна. Проверьте почту для подтверждения (если включено).';
           msg.style.display = 'block';
-          form.reset();
         }
+
+        // Очистка формы и восстановление UI
+        try { form.reset(); } catch (e) { }
+        var firstInput = form.querySelector('input');
+        if (firstInput) firstInput.focus();
+
         btn.disabled = false;
+        btn.textContent = originalLabel;
       });
     })();
   </script>
