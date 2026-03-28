@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Склад Pro — управление складом</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-glow"></div>
+  <div class="login-box">
+    <div class="login-logo">Склад Pro</div>
+    
+    <div class="login-field">
+      <label>Логин</label>
+      <input type="text" id="login-user" value="admin" placeholder="Введите логин">
+    </div>
+    <div class="login-field">
+      <label>Пароль</label>
+      <input type="password" id="login-pass" value="••••••" placeholder="Введите пароль">
+    </div>
+    <div style="margin-bottom:20px;">
+      <div class="login-field" style="margin-bottom:8px;"><label>Роль входа</label></div>
+      <div class="login-role-select">
+        <div class="role-btn active" onclick="selectRole(this,'admin')">Админ</div>
+        <div class="role-btn" onclick="selectRole(this,'manager')">Менеджер</div>
+        <div class="role-btn" onclick="selectRole(this,'worker')">Работник</div>
+      </div>
+    </div>
+    <button class="login-btn" onclick="doLogin()">Войти</button>
+    <p class="login-hint" style="margin-top:16px;margin-bottom:0">
+      <a href="index.html" style="color:var(--accent-3);text-decoration:underline;text-underline-offset:3px">Сайт для клиентов</a>
+      — о складе и регистрация
+    </p>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <nav id="sidebar">
+    <div class="sidebar-logo">Склад<span>управление складом</span></div>
+    <div class="nav-section-label">Главное</div>
+    <div class="nav-item active" onclick="nav('dashboard')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 17V9"/><path d="M12 17v-5"/><path d="M16 17v-3"/></svg></span><span>Дашборд</span>
+    </div>
+    <div class="nav-item" onclick="nav('products')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M3 3h18v5H3z"/><path d="M12 12v4"/></svg></span><span>Товары</span>
+    </div>
+    <div class="nav-item" onclick="nav('categories')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span><span>Категории</span>
+    </div>
+    <div class="nav-section-label">Операции</div>
+    <div class="nav-item" onclick="nav('supplies')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9"/><path d="M14 17h1"/><path d="M5 17h1"/><rect x="14" y="17" width="8" height="5" rx="1"/></svg></span><span>Поставки</span>
+    </div>
+    <div class="nav-item" onclick="nav('orders')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/><path d="M8 12h8"/><path d="M8 16h8"/></svg></span><span>Заказы</span><span class="nav-badge" id="orders-badge">3</span>
+    </div>
+    <div class="nav-item" onclick="nav('history')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></span><span>История</span>
+    </div>
+    <div class="nav-section-label">Аналитика</div>
+    <div class="nav-item" onclick="nav('reports')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 3v18h18"/><path d="M7 16l4-4 4 4 4-8"/></svg></span><span>Отчёты</span>
+    </div>
+    <div class="nav-item" onclick="nav('audit')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v4"/><path d="M11 16h.01"/></svg></span><span>Аудит</span>
+    </div>
+    <div class="nav-section-label">Система</div>
+    <div class="nav-item admin-only" onclick="nav('users')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span>Пользователи</span>
+    </div>
+    <div class="nav-item" onclick="nav('settings')">
+      <span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span><span>Настройки</span>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="user-card" onclick="nav('settings')">
+        <div class="user-avatar" id="sidebar-avatar">A</div>
+        <div class="user-info">
+          <div class="user-name" id="sidebar-username">Администратор</div>
+          <div class="user-role" id="sidebar-role">admin</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div id="main">
+    <div id="topbar">
+      <div class="topbar-left">
+        <div class="topbar-title" id="topbar-title">Дашборд</div>
+        <div class="topbar-crumb" id="topbar-crumb"><span class="realtime-dot"></span>Данные обновляются в реальном времени</div>
+      </div>
+      <div class="topbar-search">
+        <span class="search-glyph" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
+        <input type="text" placeholder="Поиск товаров, заказов..." oninput="globalSearch(this.value)">
+      </div>
+      <div class="topbar-actions">
+        <div class="icon-btn" onclick="toggleNotif()" title="Уведомления">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <div class="notif-dot" id="notif-dot"></div>
+        </div>
+        <div class="icon-btn" onclick="doLogout()" title="Выйти"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></div>
+      </div>
+    </div>
+
+    <div id="content">
+
+      <div id="panel-dashboard" class="panel active">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Дашборд <span>склада</span></div>
+            <div class="page-sub"><span class="realtime-dot"></span> Обновлено: <span id="last-update">—</span></div>
+          </div>
+          <button class="btn btn-primary" onclick="refreshDashboard()">Обновить</button>
+        </div>
+
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card" style="--card-accent:var(--accent)">
+            <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 8v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M3 3h18v5H3z"/></svg></div>
+            <div class="stat-label">Всего товаров</div>
+            <div class="stat-value" id="stat-total">—</div>
+            <div class="stat-delta up" id="stat-total-d">—</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--accent-green)">
+            <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+            <div class="stat-label">В наличии</div>
+            <div class="stat-value" id="stat-instock">—</div>
+            <div class="stat-delta" id="stat-instock-d">—</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--accent-red)">
+            <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
+            <div class="stat-label">Заканчивается</div>
+            <div class="stat-value" id="stat-low">—</div>
+            <div class="stat-delta down" id="stat-low-d">требуют пополнения</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--accent-3)">
+            <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/></svg></div>
+            <div class="stat-label">Активных заказов</div>
+            <div class="stat-value" id="stat-orders">—</div>
+            <div class="stat-delta" id="stat-orders-d">—</div>
+          </div>
+        </div>
+
+        <div id="low-stock-alert" class="alert-strip" style="display:none">
+          <span class="icon" aria-hidden="true">!</span>
+          <span id="low-stock-msg"></span>
+          <button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="nav('products')">Посмотреть →</button>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Движение товаров (7 дней)</div>
+              <div style="font-size:11px;color:var(--text-2);font-family:var(--font-mono)">Приход / Расход</div>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="chart-movements" height="180"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">По категориям</div>
+            </div>
+            <div class="card-body">
+              <div class="chart-container"><canvas id="chart-categories" height="180"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Последние операции</div>
+              <button class="btn btn-sm btn-secondary" onclick="nav('history')">Все →</button>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div id="dash-recent-ops" class="timeline" style="padding:12px 16px"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Критические остатки</div>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div id="dash-critical" style="padding:4px 0"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Оборот за месяц</div>
+          </div>
+          <div class="card-body">
+            <canvas id="chart-monthly" height="100"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-products" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Управление <span>товарами</span></div>
+            <div class="page-sub">Учёт, статус, остатки на складе</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-add-product')">Добавить товар</button>
+        </div>
+        <div class="filter-bar">
+          <input type="text" placeholder="Поиск по названию или артикулу…" oninput="filterProducts()" id="prod-search" style="width:280px">
+          <select class="form-control" id="prod-cat-filter" onchange="filterProducts()">
+            <option value="">Все категории</option>
+          </select>
+          <select class="form-control" id="prod-status-filter" onchange="filterProducts()">
+            <option value="">Все статусы</option>
+            <option value="instock">В наличии</option>
+            <option value="low">Заканчивается</option>
+            <option value="out">Нет в наличии</option>
+          </select>
+          <select class="form-control" id="prod-sort" onchange="filterProducts()">
+            <option value="name">По названию</option>
+            <option value="qty-asc">Кол-во ↑</option>
+            <option value="qty-desc">Кол-во ↓</option>
+            <option value="price">По цене</option>
+          </select>
+          <div style="margin-left:auto;font-size:12px;color:var(--text-2);font-family:var(--font-mono)">Найдено: <span id="prod-count">—</span></div>
+        </div>
+        <div class="card">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Товар</th>
+                  <th>Артикул</th>
+                  <th>Категория</th>
+                  <th>Кол-во</th>
+                  <th>Мин. остаток</th>
+                  <th>Цена</th>
+                  <th>Статус</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody id="products-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-categories" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Категории <span>товаров</span></div>
+            <div class="page-sub">Группировка и классификация</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-add-cat')">Добавить категорию</button>
+        </div>
+        <div class="three-col" id="categories-grid"></div>
+      </div>
+
+      <div id="panel-supplies" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Поставки <span>и списания</span></div>
+            <div class="page-sub">Приход товара, списание, инвентаризация</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-success" onclick="openSupplyModal('in')">Приход</button>
+            <button class="btn btn-danger" onclick="openSupplyModal('out')">Списание</button>
+            <button class="btn btn-secondary" onclick="openSupplyModal('inv')">Инвентаризация</button>
+          </div>
+        </div>
+        <div class="two-col" style="margin-bottom:20px">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Статистика поставок</div></div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+                <div class="report-metric"><div class="report-metric-value" id="sup-total-in">0</div><div class="report-metric-label">Приход (шт)</div></div>
+                <div class="report-metric"><div class="report-metric-value" id="sup-total-out" style="color:var(--accent-red)">0</div><div class="report-metric-label">Списано (шт)</div></div>
+                <div class="report-metric"><div class="report-metric-value" id="sup-ops-count" style="color:var(--accent-3)">0</div><div class="report-metric-label">Операций</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Поставщики</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:10px" id="suppliers-list"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">История поставок</div>
+            <div class="filter-bar" style="margin:0">
+              <select class="form-control" id="sup-type-filter" onchange="filterSupplies()">
+                <option value="">Все типы</option>
+                <option value="in">Приход</option>
+                <option value="out">Списание</option>
+                <option value="inv">Инвентаризация</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Дата</th>
+                  <th>Тип</th>
+                  <th>Товар</th>
+                  <th>Кол-во</th>
+                  <th>Поставщик</th>
+                  <th>Ответственный</th>
+                  <th>Примечание</th>
+                </tr>
+              </thead>
+              <tbody id="supplies-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-orders" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Заказы <span>и отгрузки</span></div>
+            <div class="page-sub">Создание, обработка, статус доставки</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-add-order')">Новый заказ</button>
+        </div>
+        <div class="stats-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">
+          <div class="stat-card" style="--card-accent:var(--text-1)">
+            <div class="stat-label">Новые</div>
+            <div class="stat-value" style="font-size:28px" id="ord-stat-new">0</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--accent)">
+            <div class="stat-label">В обработке</div>
+            <div class="stat-value" style="font-size:28px" id="ord-stat-proc">0</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--accent-3)">
+            <div class="stat-label">В пути</div>
+            <div class="stat-value" style="font-size:28px" id="ord-stat-ship">0</div>
+          </div>
+          <div class="stat-card" style="--card-accent:var(--accent-green)">
+            <div class="stat-label">Доставлено</div>
+            <div class="stat-value" style="font-size:28px" id="ord-stat-done">0</div>
+          </div>
+        </div>
+        <div class="kanban" id="orders-kanban"></div>
+      </div>
+
+      <div id="panel-history" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">История <span>операций</span></div>
+            <div class="page-sub">Полный журнал всех складских операций</div>
+          </div>
+          <button class="btn btn-secondary" onclick="exportHistory()">Экспорт CSV</button>
+        </div>
+        <div class="filter-bar">
+          <input type="date" class="form-control" id="hist-date-from">
+          <input type="date" class="form-control" id="hist-date-to">
+          <select class="form-control" id="hist-type" onchange="renderHistory()">
+            <option value="">Все операции</option>
+            <option value="in">Приход</option>
+            <option value="out">Списание</option>
+            <option value="order">Заказ</option>
+            <option value="inv">Инвентаризация</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="renderHistory()">Применить</button>
+        </div>
+        <div class="card">
+          <div id="history-container" style="max-height:600px;overflow-y:auto"></div>
+        </div>
+      </div>
+
+      <div id="panel-reports" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Отчёты <span>и аналитика</span></div>
+            <div class="page-sub">Статистика, динамика, ключевые показатели</div>
+          </div>
+          <select class="form-control" style="width:160px" id="report-period" onchange="renderReports()">
+            <option value="7">7 дней</option>
+            <option value="30" selected>30 дней</option>
+            <option value="90">90 дней</option>
+          </select>
+        </div>
+        <div class="stats-grid" id="report-kpis"></div>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Топ-5 товаров по обороту</div></div>
+            <div class="card-body" style="padding:0">
+              <div id="top-products-list" style="padding:8px 0"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Стоимость остатков по категориям</div></div>
+            <div class="card-body">
+              <canvas id="chart-value" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Динамика заказов</div></div>
+          <div class="card-body">
+            <canvas id="chart-orders-trend" height="120"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div id="panel-audit" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Аудит <span>действий</span></div>
+            <div class="page-sub">Журнал всех действий пользователей в системе</div>
+          </div>
+        </div>
+        <div class="card">
+          <div style="background:var(--bg-1);padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px">
+            <span style="font-size:10px;color:var(--text-2);font-family:var(--font-mono);min-width:100px">ВРЕМЯ</span>
+            <span style="font-size:10px;color:var(--text-2);font-family:var(--font-mono);min-width:100px">ПОЛЬЗОВАТЕЛЬ</span>
+            <span style="font-size:10px;color:var(--text-2);font-family:var(--font-mono);flex:1">ДЕЙСТВИЕ</span>
+            <span style="font-size:10px;color:var(--text-2);font-family:var(--font-mono);min-width:80px">ТИП</span>
+          </div>
+          <div id="audit-log" style="max-height:600px;overflow-y:auto"></div>
+        </div>
+      </div>
+
+      <div id="panel-users" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Пользователи <span>системы</span></div>
+            <div class="page-sub">Управление доступом и ролями</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModal('modal-add-user')">Добавить пользователя</button>
+        </div>
+        <div class="three-col" id="users-grid"></div>
+      </div>
+
+      <div id="panel-settings" class="panel">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Настройки <span>системы</span></div>
+            <div class="page-sub">Конфигурация склада и системы</div>
+          </div>
+          <button class="btn btn-primary" onclick="saveSettings()">Сохранить</button>
+        </div>
+        <div class="two-col">
+          <div>
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-header"><div class="card-title">Основные настройки</div></div>
+              <div class="card-body">
+                <div class="settings-section" style="margin-bottom:0">
+                  <div class="settings-row">
+                    <div><div class="settings-label">Название склада</div></div>
+                    <input class="form-control" id="set-name" value="Центральный склад" style="width:200px">
+                  </div>
+                  <div class="settings-row">
+                    <div><div class="settings-label">Мин. остаток по умолчанию</div></div>
+                    <input class="form-control" id="set-minstock" value="10" type="number" style="width:80px">
+                  </div>
+                  <div class="settings-row">
+                    <div><div class="settings-label">Валюта</div></div>
+                    <select class="form-control" id="set-currency" style="width:120px">
+                      <option value="RUB" selected>₽ Рубль</option>
+                      <option value="USD">$ Доллар</option>
+                      <option value="EUR">€ Евро</option>
+                    </select>
+                  </div>
+                  <div class="settings-row">
+                    <div>
+                      <div class="settings-label">Уведомления о низком остатке</div>
+                      <div class="settings-label-sub">Оповещать при достижении минимума</div>
+                    </div>
+                    <div class="toggle on" id="toggle-notif" onclick="toggleSetting(this)"></div>
+                  </div>
+                  <div class="settings-row">
+                    <div>
+                      <div class="settings-label">Авто-списание заказов</div>
+                      <div class="settings-label-sub">Автоматически уменьшать остатки</div>
+                    </div>
+                    <div class="toggle on" id="toggle-autosub" onclick="toggleSetting(this)"></div>
+                  </div>
+                  <div class="settings-row">
+                    <div>
+                      <div class="settings-label">Двухфакторная аутентификация</div>
+                      <div class="settings-label-sub">Требовать подтверждение входа</div>
+                    </div>
+                    <div class="toggle" id="toggle-2fa" onclick="toggleSetting(this)"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-header"><div class="card-title">Информация о системе</div></div>
+              <div class="card-body">
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;justify-content:space-between;font-size:13px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+                    <span style="color:var(--text-2);font-family:var(--font-mono)">Версия системы</span>
+                    <span class="badge badge-green">v2.1.0</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;font-size:13px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+                    <span style="color:var(--text-2);font-family:var(--font-mono)">Статус БД</span>
+                    <span class="badge badge-green">Подключена</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;font-size:13px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+                    <span style="color:var(--text-2);font-family:var(--font-mono)">Последний бэкап</span>
+                    <span style="font-family:var(--font-mono);font-size:11px">Сегодня 03:00</span>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;font-size:13px">
+                    <span style="color:var(--text-2);font-family:var(--font-mono)">Занято места</span>
+                    <span style="font-family:var(--font-mono);font-size:11px">2.4 MB / 1 GB</span>
+                  </div>
+                  <div class="progress-wrap" style="height:6px"><div class="progress-bar" style="width:0.24%"></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">Опасная зона</div></div>
+              <div class="card-body" style="display:flex;gap:10px;flex-direction:column">
+                <button class="btn btn-secondary" style="width:100%" onclick="showToast('Резервная копия создана','success')">Создать бэкап</button>
+                <button class="btn btn-danger" style="width:100%" onclick="if(confirm('Сбросить демо-данные?'))initData()">Сбросить данные</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="notif-panel" class="notif-panel">
+  <div style="padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+    <span style="font-family:var(--font-cond);font-size:15px;font-weight:600">Уведомления</span>
+    <span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="markAllRead()">Прочитать все</span>
+  </div>
+  <div id="notif-list"></div>
+</div>
+
+<div id="toast-container"></div>
+
+ 
+<div class="modal-overlay" id="modal-add-product">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="prod-modal-title">Добавить товар</div>
+      <span class="modal-close" onclick="closeModal('modal-add-product')" title="Закрыть">&times;</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-prod-id">
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Название *</label>
+          <input class="form-control" id="prod-name" placeholder="Например: Ноутбук HP 15">
+        </div>
+        <div class="form-group">
+          <label>Артикул</label>
+          <input class="form-control" id="prod-sku" placeholder="SKU-001">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Категория *</label>
+          <select class="form-control" id="prod-cat"></select>
+        </div>
+        <div class="form-group">
+          <label>Поставщик</label>
+          <select class="form-control" id="prod-supplier">
+            <option value="">Не указан</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Количество</label>
+          <input class="form-control" id="prod-qty" type="number" value="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>Мин. остаток</label>
+          <input class="form-control" id="prod-minqty" type="number" value="10" min="0">
+        </div>
+        <div class="form-group">
+          <label>Цена (₽)</label>
+          <input class="form-control" id="prod-price" type="number" value="0" min="0">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Ед. измерения</label>
+          <select class="form-control" id="prod-unit">
+            <option>шт</option><option>кг</option><option>л</option><option>м</option><option>уп</option><option>коробка</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Местоположение</label>
+          <input class="form-control" id="prod-location" placeholder="A-1-01">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Описание</label>
+        <textarea class="form-control" id="prod-desc" placeholder="Краткое описание товара..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-product')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveProduct()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-add-cat">
+  <div class="modal" style="width:400px">
+    <div class="modal-header">
+      <div class="modal-title">Добавить категорию</div>
+      <span class="modal-close" onclick="closeModal('modal-add-cat')" title="Закрыть">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Название *</label>
+        <input class="form-control" id="cat-name" placeholder="Например: Электроника">
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Краткая метка (необязательно)</label>
+          <input class="form-control" id="cat-icon" value="" placeholder="1–2 символа" maxlength="2" style="font-size:15px">
+        </div>
+        <div class="form-group">
+          <label>Цвет акцента</label>
+          <select class="form-control" id="cat-color">
+            <option value="var(--accent)">Золотой</option>
+            <option value="var(--accent-green)">Зелёный</option>
+            <option value="var(--accent-3)">Синий</option>
+            <option value="var(--accent-red)">Красный</option>
+            <option value="var(--accent-purple)">Фиолетовый</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-cat')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveCategory()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-supply">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="supply-modal-title">Приход товара</div>
+      <span class="modal-close" onclick="closeModal('modal-supply')" title="Закрыть">&times;</span>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="supply-type">
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Товар *</label>
+        <select class="form-control" id="supply-product"></select>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Количество *</label>
+          <input class="form-control" id="supply-qty" type="number" value="1" min="1">
+        </div>
+        <div class="form-group">
+          <label>Поставщик</label>
+          <select class="form-control" id="supply-supplier">
+            <option value="">Не указан</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Примечание</label>
+        <textarea class="form-control" id="supply-note" placeholder="Дополнительная информация..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-supply')">Отмена</button>
+      <button class="btn btn-primary" id="supply-btn" onclick="saveSupply()">Провести</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-add-order">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Новый заказ</div>
+      <span class="modal-close" onclick="closeModal('modal-add-order')" title="Закрыть">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Клиент *</label>
+          <input class="form-control" id="ord-client" placeholder="ООО «Компания»">
+        </div>
+        <div class="form-group">
+          <label>Приоритет</label>
+          <select class="form-control" id="ord-priority">
+            <option value="normal">Обычный</option>
+            <option value="high">Высокий</option>
+            <option value="urgent">Срочный</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Товар</label>
+          <select class="form-control" id="ord-product"></select>
+        </div>
+        <div class="form-group">
+          <label>Количество</label>
+          <input class="form-control" id="ord-qty" type="number" value="1" min="1">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Адрес доставки</label>
+        <input class="form-control" id="ord-address" placeholder="г. Москва, ул. Примерная, д. 1">
+      </div>
+      <div class="form-group">
+        <label>Примечание</label>
+        <textarea class="form-control" id="ord-note" placeholder="Особые условия, пожелания..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-order')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveOrder()">Создать заказ</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-add-user">
+  <div class="modal" style="width:460px">
+    <div class="modal-header">
+      <div class="modal-title">Добавить пользователя</div>
+      <span class="modal-close" onclick="closeModal('modal-add-user')" title="Закрыть">&times;</span>
+    </div>
+    <div class="modal-body">
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Имя *</label>
+          <input class="form-control" id="usr-name" placeholder="Иван Иванов">
+        </div>
+        <div class="form-group">
+          <label>Логин *</label>
+          <input class="form-control" id="usr-login" placeholder="ivanov">
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Пароль *</label>
+          <input class="form-control" type="password" id="usr-pass" placeholder="••••••">
+        </div>
+        <div class="form-group">
+          <label>Роль</label>
+          <select class="form-control" id="usr-role">
+            <option value="admin">Администратор</option>
+            <option value="manager">Менеджер</option>
+            <option value="worker">Работник склада</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group">
+          <label>Email</label>
+          <input class="form-control" id="usr-email" type="email" placeholder="ivan@example.com">
+        </div>
+        <div class="form-group">
+          <label>Телефон</label>
+          <input class="form-control" id="usr-phone" placeholder="+7 999 123-45-67">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-add-user')">Отмена</button>
+      <button class="btn btn-primary" onclick="saveUser()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<script src="app-core.js"></script>
+<script src="app-categories.js"></script>
+<script src="app-supplies.js"></script>
+<script src="app-orders.js"></script>
+<script src="app-history.js"></script>
+<script src="app-reports.js"></script>
+<script src="app-admin.js"></script>
+<script src="app-helpers.js"></script>
+<script src="app-init.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Склад Pro — для клиентов</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="client.css">
+</head>
+<body>
+  <div class="client-page">
+    <header class="client-header">
+      <div class="client-brand">
+        Склад Pro
+        <span>Логистика и хранение</span>
+      </div>
+      <nav class="client-nav" aria-label="Навигация">
+        <a href="#about">О складе</a>
+        <a href="#services">Возможности</a>
+        <a href="#register">Регистрация</a>
+        <a href="admin.html">Вход для сотрудников</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="client-hero" id="about">
+        <div class="client-hero-glow" aria-hidden="true"></div>
+        <h1>Современный склад для приёма, хранения и отгрузки ваших товаров</h1>
+        <p class="lead">
+          Мы обеспечиваем учёт остатков, контроль сроков и прозрачные отгрузки. Подключайтесь как клиент —
+          оформляйте заказы, отслеживайте статусы и работайте с менеджерами в одной системе.
+        </p>
+        <div class="client-cta-row">
+          <a class="client-btn client-btn-primary" href="#register">Зарегистрироваться</a>
+          <a class="client-btn client-btn-ghost" href="#services">Что вы получаете</a>
+        </div>
+      </section>
+
+      <section class="client-section" id="services">
+        <div class="client-section-title">Зачем нужен <span style="color:var(--accent)">наш склад</span></div>
+        <div class="client-section-sub">Кратко о пользе для вашей компании</div>
+        <div class="client-grid">
+          <article class="client-card">
+            <div class="client-card-icon">01</div>
+            <h3>Хранение и учёт</h3>
+            <p>Размещение партий, контроль минимальных остатков и понятная картина по номенклатуре — без «чёрных ящиков».</p>
+          </article>
+          <article class="client-card">
+            <div class="client-card-icon">02</div>
+            <h3>Приход и отгрузка</h3>
+            <p>Приём поставок, комплектация заказов и отгрузка по расписанию — с фиксацией в системе.</p>
+          </article>
+          <article class="client-card">
+            <div class="client-card-icon">03</div>
+            <h3>Заказы под ключ</h3>
+            <p>Вы создаёте заявки, мы обрабатываем их на складе: статусы видны в личном кабинете (в развитии).</p>
+          </article>
+          <article class="client-card">
+            <div class="client-card-icon">04</div>
+            <h3>Прозрачность</h3>
+            <p>История операций и отчёты помогают планировать закупки и избегать простоев на полке.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="client-section">
+        <div class="client-two-col">
+          <div>
+            <div class="client-section-title">Как это <span style="color:var(--accent-3)">работает</span></div>
+            <div class="client-section-sub">Типовой сценарий</div>
+            <ul class="client-list">
+              <li>Регистрируетесь как клиент — мы видим ваши контакты в базе.</li>
+              <li>Согласовываем условия хранения и отгрузки с менеджером.</li>
+              <li>Передаёте товар на склад или оформляете заказ на отгрузку.</li>
+              <li>Получаете подтверждения операций и актуальные остатки.</li>
+            </ul>
+          </div>
+          <div class="client-register" id="register">
+            <h2>Регистрация клиента</h2>
+            <p class="hint">Данные сохраняются в защищённой базе. Пароль хранится в виде хэша.</p>
+            <form class="client-form" id="client-register-form" novalidate>
+              <div class="form-group">
+                <label for="name">Контактное лицо *</label>
+                <input id="name" name="full_name" type="text" required autocomplete="name" placeholder="Иван Иванов">
+              </div>
+              <div class="form-group">
+                <label for="company">Компания</label>
+                <input id="company" name="company" type="text" autocomplete="organization" placeholder="ООО «Пример»">
+              </div>
+              <div class="form-group">
+                <label for="email">Email *</label>
+                <input id="email" name="email" type="email" required autocomplete="email" placeholder="you@company.ru">
+              </div>
+              <div class="form-group">
+                <label for="phone">Телефон</label>
+                <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="+7 …">
+              </div>
+              <div class="form-group">
+                <label for="password">Пароль * (не менее 8 символов)</label>
+                <input id="password" name="password" type="password" required autocomplete="new-password" minlength="8" placeholder="••••••••">
+              </div>
+              <button type="submit" class="client-btn client-btn-primary" style="width:100%;margin-top:8px">Создать аккаунт</button>
+            </form>
+            <div id="reg-msg" class="client-msg" role="status"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="client-footer">
+      © Склад Pro — клиентский раздел. Для сотрудников: <a href="admin.html" style="color:var(--accent-3)">панель управления</a>.
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <script>
+    const SUPABASE_URL = 'https://igoiopcrhodnwwatbyag.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_varC-v-ErJbj0tfaeCt_Uw__R2xWdpf';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  </script>
+
+  <script>
+    (function () {
+      var form = document.getElementById('client-register-form');
+      var msg = document.getElementById('reg-msg');
+
+      function apiBase() {
+        if (window.location.protocol === 'file:') return 'http://localhost:3000';
+        return '';
+      }
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        msg.className = 'client-msg';
+        msg.textContent = '';
+        msg.style.display = 'none';
+
+        var full_name = (document.querySelector('#name') && document.querySelector('#name').value || '').trim();
+        var company = (document.querySelector('#company') && document.querySelector('#company').value || '').trim();
+        var email = (document.querySelector('#email') && document.querySelector('#email').value || '').trim();
+        var phone = (document.querySelector('#phone') && document.querySelector('#phone').value || '').trim();
+        var password = (document.querySelector('#password') && document.querySelector('#password').value) || '';
+
+        var btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+
+        if (!email || !password) {
+          alert('Email и пароль обязательны');
+          btn.disabled = false;
+          return;
+        }
+
+        const { data, error } = await supabase.auth.signUp({ email: email, password: password });
+        if (error) {
+          alert(error.message);
+          btn.disabled = false;
+          return;
+        }
+
+        const user = data && data.user ? data.user : data;
+
+        const { error: profileError } = await supabase.from('profiles').insert([{
+          id: user && user.id ? user.id : null,
+          full_name: full_name,
+          company: company,
+          phone: phone,
+          email: email
+        }]);
+
+        if (profileError) {
+          alert(profileError.message || 'Ошибка сохранения профиля');
+        } else {
+          alert('Регистрация успешна!');
+          msg.className = 'client-msg ok';
+          msg.textContent = 'Регистрация успешна. Проверьте почту для подтверждения (если включено).';
+          msg.style.display = 'block';
+          form.reset();
+        }
+        btn.disabled = false;
+      });
+    })();
+  </script>
+</body>
+</html>
