@@ -170,7 +170,6 @@
           return;
         }
 
-        // get user from signUp result (handles different response shapes)
         const user = data.user ?? data.session?.user ?? data;
 
         if (!user || !user.id) {
@@ -182,7 +181,6 @@
           return;
         }
 
-        // Сохраняем профиль только после успешной регистрации
         const { error: profileError } = await supabase.from('profiles').insert([{
           id: user.id,
           full_name: name,
@@ -195,16 +193,20 @@
           msg.className = 'client-msg error';
           msg.textContent = 'Пользователь создан, но профиль не сохранён: ' + (profileError.message || '');
           msg.style.display = 'block';
+          // don't redirect when profile save fails; allow user to retry or contact support
         } else {
           msg.className = 'client-msg ok';
-          msg.textContent = 'Регистрация успешна. Проверьте почту для подтверждения (если включено).';
+          msg.textContent = 'Регистрация успешна. Сейчас перенаправим вас на страницу входа.';
           msg.style.display = 'block';
-        }
 
-        // Очистка формы и восстановление UI
-        try { form.reset(); } catch (e) { }
-        var firstInput = form.querySelector('input');
-        if (firstInput) firstInput.focus();
+          try { form.reset(); } catch (e) { }
+          var firstInput = form.querySelector('input');
+          if (firstInput) firstInput.focus();
+
+          setTimeout(function () {
+            window.location.href = 'admin.html';
+          }, 1200);
+        }
 
         btn.disabled = false;
         btn.textContent = originalLabel;
