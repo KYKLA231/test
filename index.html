@@ -173,9 +173,12 @@
         const user = data.user ?? data.session?.user ?? data;
 
         if (!user || !user.id) {
-          msg.className = 'client-msg error';
-          msg.textContent = 'Не удалось получить id пользователя после регистрации.';
+          console.warn('No user id after signUp', data);
+          msg.className = 'client-msg warning';
+          msg.textContent = 'Регистрация прошла, но не удалось получить id. Сейчас перенаправим на страницу входа.';
           msg.style.display = 'block';
+          try { form.reset(); } catch (e) { }
+          setTimeout(function () { window.location.href = 'admin.html'; }, 1200);
           btn.disabled = false;
           btn.textContent = originalLabel;
           return;
@@ -190,10 +193,12 @@
         }]);
 
         if (profileError) {
+          console.error('Profile insert error', profileError);
           msg.className = 'client-msg error';
           msg.textContent = 'Пользователь создан, но профиль не сохранён: ' + (profileError.message || '');
           msg.style.display = 'block';
-          // don't redirect when profile save fails; allow user to retry or contact support
+          // Redirect anyway so user can sign in; admin can check DB later
+          setTimeout(function () { window.location.href = 'admin.html'; }, 1800);
         } else {
           msg.className = 'client-msg ok';
           msg.textContent = 'Регистрация успешна. Сейчас перенаправим вас на страницу входа.';
