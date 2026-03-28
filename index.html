@@ -143,6 +143,8 @@
         var phone = (document.querySelector('#phone') && document.querySelector('#phone').value || '').trim();
         var password = (document.querySelector('#password') && document.querySelector('#password').value) || '';
 
+        var name = full_name;
+
         var btn = form.querySelector('button[type="submit"]');
         btn.disabled = true;
 
@@ -159,11 +161,19 @@
           return;
         }
 
-        const user = data && data.user ? data.user : data;
+        // get user from signUp result (handles different response shapes)
+        const user = data.user ?? data.session?.user ?? data;
 
+        if (!user || !user.id) {
+          alert('Не удалось получить id пользователя после регистрации.');
+          btn.disabled = false;
+          return;
+        }
+
+        // Сохраняем профиль только после успешной регистрации
         const { error: profileError } = await supabase.from('profiles').insert([{
-          id: user && user.id ? user.id : null,
-          full_name: full_name,
+          id: user.id,
+          full_name: name,
           company: company,
           phone: phone,
           email: email
