@@ -16,6 +16,7 @@ let realtimeInterval = null;
 
 let __productsSync = { loaded: false, loading: false, channel: null };
 let __productsWarnedNoSession = false;
+let __productsNeedsSupabaseLogin = false;
 
 function rememberLogin(login, password) {
   try {
@@ -145,12 +146,14 @@ async function loadProductsFromSupabase(force) {
   try {
     const sess = await window.supabaseClient.auth.getSession();
     if (!sess || !sess.data || !sess.data.session) {
+      __productsNeedsSupabaseLogin = true;
       if (!__productsWarnedNoSession) {
         __productsWarnedNoSession = true;
         showToast('Нет активной сессии Supabase. Товары показываются из локальной базы. Войдите email+паролем Supabase.', 'warning');
       }
       return false;
     }
+    __productsNeedsSupabaseLogin = false;
     __productsWarnedNoSession = false;
     const { data, error } = await window.supabaseClient
       .from('products')
@@ -355,6 +358,40 @@ async function doLogin() {
       }
       if (login.includes('@') && !serverUser) {
         showLoginError(supabaseLoginHint(error));
+        return;
+      }
+    }
+  }
+
+  if (serverUser && typeof window.supabaseClient !== 'undefined' && window.supabaseClient && window.supabaseClient.auth) {
+    const fallbackEmail = String(serverUser.email || '').trim().toLowerCase();
+    if (fallbackEmail) {
+      const retry = await window.supabaseClient.auth.signInWithPassword({
+        email: fallbackEmail,
+        password: pass
+      });
+      if (!retry.error && retry.data && retry.data.user) {
+        const { data: prof, error: pErr } = await window.supabaseClient
+          .from('profiles')
+          .select('*')
+          .eq('id', retry.data.user.id)
+          .maybeSingle();
+        if (pErr) console.warn('profiles:', pErr);
+        const p = prof || {};
+        const role = normalizeProfileRole(p.role);
+        currentUser = {
+          id: retry.data.user.id,
+          name: p.full_name || p.username || fallbackEmail,
+          login: p.username || fallbackEmail,
+          pass: pass,
+          role,
+          email: p.email || fallbackEmail,
+          phone: p.phone,
+          company: p.company,
+          active: true,
+          avatar: initialsFromName(p.full_name || p.username || fallbackEmail)
+        };
+        openSession(currentUser.name);
         return;
       }
     }
@@ -685,7 +722,22 @@ function renderProducts() {
   updateCategorySelects();
   if (canUseSupabaseProducts()) {
     ensureProductsRealtime();
-    loadProductsFromSupabase(false).then(()=>filterProducts()).catch(()=>filterProducts());
+    loadProductsFromSupabase(false).then((ok)=>{
+      if (ok) {
+        filterProducts();
+        return;
+      }
+      if (__productsNeedsSupabaseLogin) {
+        const tbody = document.getElementById('products-tbody');
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:36px;color:var(--text-1)">Нет сессии Supabase. Войдите через email и пароль аккаунта Supabase, затем откройте раздел «Товары» снова.</td></tr>`;
+        }
+        const cnt = document.getElementById('prod-count');
+        if (cnt) cnt.textContent = '0';
+        return;
+      }
+      filterProducts();
+    }).catch(()=>filterProducts());
     return;
   }
   filterProducts();

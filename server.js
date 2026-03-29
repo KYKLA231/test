@@ -232,7 +232,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'sklad-pro-clients' });
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const body = req.body || {};
   const login = String(body.login || body.username || '').trim();
   const password = String(body.password || '');
@@ -254,6 +254,18 @@ app.post('/api/login', (req, res) => {
     const valid = bcrypt.compareSync(password, row.password_hash);
     if (!valid) return res.status(401).json({ ok: false, error: 'Неверный пароль.' });
 
+    let sb = { created: false, skipped: true };
+    try {
+      sb = await syncUserToSupabase({
+        email: row.email,
+        password,
+        fullName: row.full_name,
+        company: row.company,
+        phone: row.phone,
+        username: row.username,
+      });
+    } catch (e) {}
+
     const user = {
       id: row.id,
       email: row.email,
@@ -263,7 +275,13 @@ app.post('/api/login', (req, res) => {
       phone: row.phone,
       created_at: row.created_at,
     };
-    return res.json({ ok: true, user });
+    return res.json({
+      ok: true,
+      user,
+      supabase_user: sb.created === true,
+      supabase_env_missing: sb.skipped === true,
+      supabase_duplicate: sb.duplicate === true,
+    });
   } catch (e) {
     console.error('Login error', e);
     return res.status(500).json({ ok: false, error: 'Ошибка сервера при входе.' });
