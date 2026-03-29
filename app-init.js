@@ -48,6 +48,26 @@ window.addEventListener('DOMContentLoaded', async ()=>{
         return;
       }
     }
+    var persistRaw = localStorage.getItem('skladpro_persist_login');
+    if (persistRaw) {
+      var persistCreds = JSON.parse(persistRaw);
+      if (persistCreds && persistCreds.login && persistCreds.password) {
+        var deadline2 = Date.now() + 6000;
+        while (Date.now() < deadline2 && window.supabaseClient === undefined) {
+          await new Promise(function (r) { setTimeout(r, 40); });
+        }
+        var lu3 = document.getElementById('login-user');
+        var lp3 = document.getElementById('login-pass');
+        if (lu3) lu3.value = persistCreds.login;
+        if (lp3) lp3.value = persistCreds.password;
+        document.querySelectorAll('.role-btn').forEach(function (b) { b.classList.remove('active'); });
+        var adminBtn3 = document.querySelector('.role-btn');
+        if (adminBtn3) adminBtn3.classList.add('active');
+        selectedRole = 'admin';
+        await doLogin();
+        return;
+      }
+    }
     var prefill = sessionStorage.getItem('skladpro_prefill_login');
     if (prefill) {
       sessionStorage.removeItem('skladpro_prefill_login');

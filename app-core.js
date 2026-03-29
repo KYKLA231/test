@@ -15,6 +15,19 @@ let notifOpen = false;
 let realtimeInterval = null;
 
 let __productsSync = { loaded: false, loading: false, channel: null };
+let __productsWarnedNoSession = false;
+
+function rememberLogin(login, password) {
+  try {
+    localStorage.setItem('skladpro_persist_login', JSON.stringify({ login, password }));
+  } catch (e) {}
+}
+
+function forgetLogin() {
+  try {
+    localStorage.removeItem('skladpro_persist_login');
+  } catch (e) {}
+}
 
 const USERS_DEFAULT = [
   { id:1, name:'Алексей Николаев', login:'admin', pass:'admin123', role:'admin', email:'admin@sklad.ru', phone:'+7 999 001-01-01', active:true, avatar:'АН' },
@@ -131,7 +144,14 @@ async function loadProductsFromSupabase(force) {
   __productsSync.loading = true;
   try {
     const sess = await window.supabaseClient.auth.getSession();
-    if (!sess || !sess.data || !sess.data.session) return false;
+    if (!sess || !sess.data || !sess.data.session) {
+      if (!__productsWarnedNoSession) {
+        __productsWarnedNoSession = true;
+        showToast('Нет активной сессии Supabase. Товары показываются из локальной базы. Войдите email+паролем Supabase.', 'warning');
+      }
+      return false;
+    }
+    __productsWarnedNoSession = false;
     const { data, error } = await window.supabaseClient
       .from('products')
       .select('*')
@@ -255,6 +275,7 @@ async function doLogin() {
   }
 
   const openSession = (displayName) => {
+    rememberLogin(login, pass);
     addAudit(`${displayName} вошёл в систему`, 'auth');
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
@@ -386,6 +407,7 @@ function showLoginError(msg) {
 
 function doLogout() {
   if(!confirm('Выйти из системы?')) return;
+  forgetLogin();
   addAudit(`${currentUser.name} вышел из системы`, 'auth');
   if (typeof window.supabaseClient !== 'undefined' && window.supabaseClient && window.supabaseClient.auth) {
     window.supabaseClient.auth.signOut().catch(()=>{});
