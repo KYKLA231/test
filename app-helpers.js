@@ -28,7 +28,6 @@ function addAudit(action, type='info') {
   } catch (e) {}
   try {
     if (typeof getAdminToken !== 'function' || typeof skladApiBase !== 'function') return;
-    if (!skladApiBase()) return;
     getAdminToken().then((token) => {
       var headers = { 'Content-Type': 'application/json' };
       if (token) headers.Authorization = 'Bearer ' + token;
