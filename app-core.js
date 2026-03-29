@@ -14,6 +14,8 @@ let selectedRole = 'admin';
 let notifOpen = false;
 let realtimeInterval = null;
 
+let __productsSync = { loaded: false, loading: false, channel: null };
+
 const USERS_DEFAULT = [
   { id:1, name:'Алексей Николаев', login:'admin', pass:'admin123', role:'admin', email:'admin@sklad.ru', phone:'+7 999 001-01-01', active:true, avatar:'АН' },
   { id:2, name:'Мария Петрова', login:'manager', pass:'mgr123', role:'manager', email:'manager@sklad.ru', phone:'+7 999 002-02-02', active:true, avatar:'МП' },
@@ -116,6 +118,65 @@ function initialsFromName(name) {
   const parts = s.split(/\s+/).filter(Boolean);
   if(parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase().slice(0, 2);
   return s.charAt(0).toUpperCase();
+}
+
+function canUseSupabaseProducts() {
+  return !!(currentUser && currentUser.active !== false && currentUser.role === 'admin' && window.supabaseClient && window.supabaseClient.auth);
+}
+
+async function loadProductsFromSupabase(force) {
+  if (!canUseSupabaseProducts()) return false;
+  if (__productsSync.loading) return false;
+  if (__productsSync.loaded && !force) return true;
+  __productsSync.loading = true;
+  try {
+    const sess = await window.supabaseClient.auth.getSession();
+    if (!sess || !sess.data || !sess.data.session) return false;
+    const { data, error } = await window.supabaseClient
+      .from('products')
+      .select('*')
+      .order('id', { ascending: true });
+    if (error) throw error;
+    const firstCat = DB.categories && DB.categories.length ? DB.categories[0].id : 1;
+    DB.products = (data || []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      sku: r.sku || '',
+      catId: (r.cat_id != null ? Number(r.cat_id) : firstCat),
+      qty: Number(r.qty || 0),
+      minQty: Number(r.min_qty || 0),
+      price: Number(r.price || 0),
+      unit: r.unit || 'шт',
+      location: r.location || '',
+      desc: r.description || '',
+    }));
+    __productsSync.loaded = true;
+    return true;
+  } finally {
+    __productsSync.loading = false;
+  }
+}
+
+async function ensureProductsRealtime() {
+  if (!canUseSupabaseProducts()) return;
+  if (__productsSync.channel) return;
+  try {
+    const ch = window.supabaseClient
+      .channel('products-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, async () => {
+        try {
+          await loadProductsFromSupabase(true);
+          if (document.getElementById('panel-products')?.classList.contains('active')) filterProducts();
+          if (typeof renderDashboard === 'function' && document.getElementById('panel-dashboard')?.classList.contains('active')) renderDashboard();
+          if (typeof renderReports === 'function' && document.getElementById('panel-reports')?.classList.contains('active')) renderReports();
+          if (typeof renderSupplies === 'function' && document.getElementById('panel-supplies')?.classList.contains('active')) renderSupplies();
+          if (typeof renderOrders === 'function' && document.getElementById('panel-orders')?.classList.contains('active')) renderOrders();
+          if (typeof renderCategories === 'function' && document.getElementById('panel-categories')?.classList.contains('active')) renderCategories();
+        } catch (e) {}
+      })
+      .subscribe();
+    __productsSync.channel = ch;
+  } catch (e) {}
 }
 
 function generateAuditLog() {
@@ -600,6 +661,11 @@ function roundRect(ctx,x,y,w,h,r) {
 
 function renderProducts() {
   updateCategorySelects();
+  if (canUseSupabaseProducts()) {
+    ensureProductsRealtime();
+    loadProductsFromSupabase(false).then(()=>filterProducts()).catch(()=>filterProducts());
+    return;
+  }
   filterProducts();
 }
 
@@ -693,7 +759,7 @@ function editProduct(id) {
   document.getElementById('prod-location').value = p.location||'';
   document.getElementById('prod-desc').value = p.desc||'';
   updateCategorySelects();
-  document.getElementById('prod-cat').value = p.catId;
+  document.getElementById('prod-cat').value = p.catId || (DB.categories && DB.categories.length ? DB.categories[0].id : '');
   openModal('modal-add-product');
 }
 
@@ -704,6 +770,18 @@ function deleteProduct(id) {
   }
   if(!confirm('Удалить товар?')) return;
   const p = DB.products.find(x=>x.id===id);
+  if (canUseSupabaseProducts()) {
+    window.supabaseClient.from('products').delete().eq('id', id).then(({ error }) => {
+      if (error) {
+        showToast('Ошибка удаления товара', 'error');
+        return;
+      }
+      addAudit(`Удалён товар «${p ? p.name : ''}»`, 'delete');
+      loadProductsFromSupabase(true).then(()=>renderProducts());
+      showToast('Товар удалён', 'success');
+    });
+    return;
+  }
   DB.products = DB.products.filter(x=>x.id!==id);
   addAudit(`Удалён товар «${p.name}»`, 'delete');
   saveDB(); renderProducts();
@@ -729,9 +807,10 @@ function saveProduct() {
   const name = document.getElementById('prod-name').value.trim();
   if(!name) { showToast('Введите название товара','error'); return; }
   const editId = document.getElementById('edit-prod-id').value;
+  const firstCat = DB.categories && DB.categories.length ? DB.categories[0].id : 1;
   const prod = {
     name, sku: document.getElementById('prod-sku').value.trim(),
-    catId: +document.getElementById('prod-cat').value,
+    catId: +document.getElementById('prod-cat').value || firstCat,
     qty: +document.getElementById('prod-qty').value||0,
     minQty: +document.getElementById('prod-minqty').value||10,
     price: +document.getElementById('prod-price').value||0,
@@ -739,6 +818,50 @@ function saveProduct() {
     location: document.getElementById('prod-location').value.trim(),
     desc: document.getElementById('prod-desc').value.trim(),
   };
+  if (canUseSupabaseProducts()) {
+    const payloadBase = {
+      sku: prod.sku || null,
+      name: prod.name,
+      qty: prod.qty,
+      min_qty: prod.minQty,
+      price: prod.price,
+      unit: prod.unit,
+      location: prod.location || null,
+      description: prod.desc || null,
+      cat_id: prod.catId || null,
+    };
+
+    const tryWrite = async (payload) => {
+      if (editId) {
+        return await window.supabaseClient.from('products').update(payload).eq('id', Number(editId)).select('*').maybeSingle();
+      }
+      return await window.supabaseClient.from('products').insert([payload]).select('*').maybeSingle();
+    };
+
+    (async () => {
+      let payload = { ...payloadBase };
+      let resp = await tryWrite(payload);
+      if (resp.error) {
+        const msg = String(resp.error.message || '');
+        if (/column .*cat_id.* does not exist/i.test(msg)) {
+          delete payload.cat_id;
+          resp = await tryWrite(payload);
+        }
+      }
+      if (resp.error) {
+        showToast('Ошибка сохранения товара', 'error');
+        return;
+      }
+      addAudit(editId ? `Обновлён товар «${name}»` : `Добавлен товар «${name}»`, editId ? 'update' : 'create');
+      showToast(editId ? 'Товар обновлён' : 'Товар добавлен', 'success');
+      closeModal('modal-add-product');
+      document.getElementById('edit-prod-id').value='';
+      document.getElementById('prod-modal-title').textContent='Добавить товар';
+      await loadProductsFromSupabase(true);
+      renderProducts();
+    })();
+    return;
+  }
   if(editId) {
     const idx = DB.products.findIndex(p=>p.id==editId);
     if(idx>=0) { DB.products[idx]={...DB.products[idx],...prod}; addAudit(`Обновлён товар «${name}»`,'update'); }

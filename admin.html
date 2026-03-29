@@ -789,17 +789,25 @@
 <script>
 (function(){
   var localPath = 'vendor/supabase-js.js';
-  var cdnPath = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js';
-  var s = document.createElement('script');
-  s.src = localPath;
-  s.onload = function(){ if (typeof window.initSupabase === 'function') window.initSupabase(); };
-  s.onerror = function(){
-    var t = document.createElement('script');
-    t.src = cdnPath;
-    t.onload = function(){ if (typeof window.initSupabase === 'function') window.initSupabase(); };
-    document.head.appendChild(t);
+  var cdnPath = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+  var loadScript = function(src, onload, onerror){
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = onload;
+    s.onerror = onerror;
+    document.head.appendChild(s);
   };
-  document.head.appendChild(s);
+  var host = window.location.hostname || '';
+  var preferLocal = host === 'localhost' || host === '127.0.0.1';
+  var done = function(src){ console.log('Supabase loaded from', src); if (typeof window.initSupabase === 'function') window.initSupabase(); };
+  var failCdn = function(){ console.error('Failed to load supabase from CDN'); };
+  if (preferLocal) {
+    loadScript(localPath, function(){ done(localPath); }, function(){
+      loadScript(cdnPath, function(){ done('CDN'); }, failCdn);
+    });
+  } else {
+    loadScript(cdnPath, function(){ done('CDN'); }, failCdn);
+  }
 })();
 function initSupabase(){
   var SUPABASE_URL = 'https://igoiopcrhodnwwatbyag.supabase.co';
