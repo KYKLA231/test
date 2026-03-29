@@ -17,6 +17,7 @@ let realtimeInterval = null;
 let __productsSync = { loaded: false, loading: false, channel: null };
 let __productsWarnedNoSession = false;
 let __productsNeedsSupabaseLogin = false;
+let __productsServerSync = { loaded: false, loading: false };
 
 function rememberLogin(login, password) {
   try {
@@ -136,6 +137,41 @@ function initialsFromName(name) {
 
 function canUseSupabaseProducts() {
   return !!(currentUser && currentUser.active !== false && currentUser.role === 'admin' && window.supabaseClient && window.supabaseClient.auth);
+}
+
+function canUseServerProducts() {
+  return !!(skladApiBase && skladApiBase());
+}
+
+async function loadProductsFromServer(force) {
+  if (!canUseServerProducts()) return false;
+  if (__productsServerSync.loading) return false;
+  if (__productsServerSync.loaded && !force) return true;
+  __productsServerSync.loading = true;
+  try {
+    const resp = await fetch(skladApiBase() + '/api/products');
+    const j = await resp.json().catch(() => null);
+    if (!resp.ok || !j || !j.ok) return false;
+    const firstCat = DB.categories && DB.categories.length ? DB.categories[0].id : 1;
+    DB.products = (j.items || []).map((r) => ({
+      id: Number(r.id),
+      name: r.name,
+      sku: r.sku || '',
+      catId: firstCat,
+      qty: Number(r.qty || 0),
+      minQty: Number(r.min_qty || 0),
+      price: Number(r.price || 0),
+      unit: r.unit || 'шт',
+      location: r.location || '',
+      desc: r.description || '',
+    }));
+    __productsServerSync.loaded = true;
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    __productsServerSync.loading = false;
+  }
 }
 
 async function loadProductsFromSupabase(force) {
@@ -720,6 +756,15 @@ function roundRect(ctx,x,y,w,h,r) {
 
 function renderProducts() {
   updateCategorySelects();
+  if (canUseServerProducts()) {
+    loadProductsFromServer(false).then((ok) => {
+      if (!ok) {
+        showToast('Не удалось загрузить товары из сервера', 'warning');
+      }
+      filterProducts();
+    }).catch(() => filterProducts());
+    return;
+  }
   if (canUseSupabaseProducts()) {
     ensureProductsRealtime();
     loadProductsFromSupabase(false).then((ok)=>{
@@ -844,6 +889,22 @@ function deleteProduct(id) {
   }
   if(!confirm('Удалить товар?')) return;
   const p = DB.products.find(x=>x.id===id);
+  if (canUseServerProducts()) {
+    fetch(skladApiBase() + '/api/products/' + encodeURIComponent(id), { method: 'DELETE' })
+      .then((r) => r.json().catch(() => null).then((j) => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        if (!ok || !j || !j.ok) {
+          showToast((j && j.error) ? j.error : 'Ошибка удаления товара', 'error');
+          return;
+        }
+        addAudit(`Удалён товар «${p ? p.name : ''}»`, 'delete');
+        __productsServerSync.loaded = false;
+        loadProductsFromServer(true).then(()=>renderProducts());
+        showToast('Товар удалён', 'success');
+      })
+      .catch(() => showToast('Ошибка удаления товара', 'error'));
+    return;
+  }
   if (canUseSupabaseProducts()) {
     window.supabaseClient.from('products').delete().eq('id', id).then(({ error }) => {
       if (error) {
@@ -934,6 +995,43 @@ function saveProduct() {
       await loadProductsFromSupabase(true);
       renderProducts();
     })();
+    return;
+  }
+  if (canUseServerProducts()) {
+    const payload = {
+      sku: prod.sku || null,
+      name: prod.name,
+      qty: prod.qty,
+      min_qty: prod.minQty,
+      price: prod.price,
+      unit: prod.unit,
+      location: prod.location || null,
+      description: prod.desc || null,
+    };
+    const method = editId ? 'PATCH' : 'POST';
+    const url = editId
+      ? (skladApiBase() + '/api/products/' + encodeURIComponent(editId))
+      : (skladApiBase() + '/api/products');
+    fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then((r) => r.json().catch(() => null).then((j) => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        if (!ok || !j || !j.ok) {
+          showToast((j && j.error) ? j.error : 'Ошибка сохранения товара', 'error');
+          return;
+        }
+        addAudit(editId ? `Обновлён товар «${name}»` : `Добавлен товар «${name}»`, editId ? 'update' : 'create');
+        showToast(editId ? 'Товар обновлён' : 'Товар добавлен', 'success');
+        closeModal('modal-add-product');
+        document.getElementById('edit-prod-id').value='';
+        document.getElementById('prod-modal-title').textContent='Добавить товар';
+        __productsServerSync.loaded = false;
+        loadProductsFromServer(true).then(()=>renderProducts());
+      })
+      .catch(() => showToast('Ошибка сохранения товара', 'error'));
     return;
   }
   if(editId) {

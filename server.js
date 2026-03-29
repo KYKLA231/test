@@ -106,6 +106,40 @@ async function syncUserToSupabase({ email, password, fullName, company, phone, u
   }
 }
 
+function supabaseAdminConfig() {
+  const baseUrl = String(process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
+  const secret = String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  return { baseUrl, secret, enabled: !!(baseUrl && secret) };
+}
+
+async function supabaseTableRequest(pathAndQuery, method = 'GET', payload = null) {
+  const cfg = supabaseAdminConfig();
+  if (!cfg.enabled) {
+    return { ok: false, status: 500, data: null, error: 'Supabase Admin не настроен на сервере.' };
+  }
+  const headers = {
+    'Content-Type': 'application/json',
+    apikey: cfg.secret,
+    Authorization: `Bearer ${cfg.secret}`,
+  };
+  if (method !== 'GET') headers.Prefer = 'return=representation';
+  try {
+    const resp = await fetch(`${cfg.baseUrl}/rest/v1/${pathAndQuery}`, {
+      method,
+      headers,
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      const msg = (data && (data.message || data.error || data.hint)) || String(resp.status);
+      return { ok: false, status: resp.status, data, error: msg };
+    }
+    return { ok: true, status: resp.status, data, error: null };
+  } catch (e) {
+    return { ok: false, status: 500, data: null, error: e.message };
+  }
+}
+
 app.post('/api/register', async (req, res) => {
   const body = req.body || {};
   console.log('[/api/register] payload received:', body);
@@ -230,6 +264,60 @@ app.post('/api/register', async (req, res) => {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'sklad-pro-clients' });
+});
+
+app.get('/api/products', async (_req, res) => {
+  const q = 'products?select=id,sku,name,qty,min_qty,price,unit,location,supplier,description,created_at,updated_at&order=id.asc';
+  const r = await supabaseTableRequest(q, 'GET');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, items: Array.isArray(r.data) ? r.data : [] });
+});
+
+app.post('/api/products', async (req, res) => {
+  const b = req.body || {};
+  const payload = {
+    sku: String(b.sku || '').trim() || null,
+    name: String(b.name || '').trim(),
+    qty: Number(b.qty || 0),
+    min_qty: Number(b.min_qty || 0),
+    price: Number(b.price || 0),
+    unit: String(b.unit || 'шт').trim() || 'шт',
+    location: String(b.location || '').trim() || null,
+    supplier: String(b.supplier || '').trim() || null,
+    description: String(b.description || '').trim() || null,
+  };
+  if (!payload.name) return res.status(400).json({ ok: false, error: 'Укажите название товара.' });
+  const r = await supabaseTableRequest('products', 'POST', payload);
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.status(201).json({ ok: true, item: Array.isArray(r.data) ? r.data[0] : r.data });
+});
+
+app.patch('/api/products/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ ok: false, error: 'Некорректный id.' });
+  const b = req.body || {};
+  const payload = {};
+  if (b.sku !== undefined) payload.sku = String(b.sku || '').trim() || null;
+  if (b.name !== undefined) payload.name = String(b.name || '').trim();
+  if (b.qty !== undefined) payload.qty = Number(b.qty || 0);
+  if (b.min_qty !== undefined) payload.min_qty = Number(b.min_qty || 0);
+  if (b.price !== undefined) payload.price = Number(b.price || 0);
+  if (b.unit !== undefined) payload.unit = String(b.unit || 'шт').trim() || 'шт';
+  if (b.location !== undefined) payload.location = String(b.location || '').trim() || null;
+  if (b.supplier !== undefined) payload.supplier = String(b.supplier || '').trim() || null;
+  if (b.description !== undefined) payload.description = String(b.description || '').trim() || null;
+  if (payload.name !== undefined && !payload.name) return res.status(400).json({ ok: false, error: 'Укажите название товара.' });
+  const r = await supabaseTableRequest(`products?id=eq.${id}`, 'PATCH', payload);
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, item: Array.isArray(r.data) ? r.data[0] : r.data });
+});
+
+app.delete('/api/products/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ ok: false, error: 'Некорректный id.' });
+  const r = await supabaseTableRequest(`products?id=eq.${id}`, 'DELETE');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true });
 });
 
 app.post('/api/login', async (req, res) => {
