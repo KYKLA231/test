@@ -354,3 +354,22 @@
     padding-top: max(12px, env(safe-area-inset-top, 0px));
   }
 }
+
+@media (max-width: 430px) {
+  .client-header {
+    padding-top: max(14px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  }
+  .client-footer {
+    padding-bottom: max(24px, env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (max-height: 460px) and (orientation: landscape) {
+  .client-header {
+    position: static;
+  }
+  .client-hero {
+    padding-top: 24px;
+  }
+}
