@@ -148,12 +148,139 @@ function selectRole(el, role) {
   setTimeout(()=>document.getElementById('login-pass').value=passes[role],50);
 }
 
-function doLogin() {
+function normalizeProfileRole(r) {
+  const x = String(r || '').toLowerCase().trim();
+  if (x === 'manager' || x === 'worker' || x === 'admin') return x;
+  return 'admin';
+}
+
+/** Расшифровка типичных ошибок /auth/v1/token и signInWithPassword */
+function supabaseLoginHint(err) {
+  const m = String((err && err.message) ? err.message : '').toLowerCase();
+  const status = err && err.status;
+  if (/email not confirmed|confirm your email|email_not_confirmed|verification|not verified/.test(m)) {
+    return 'Email ещё не подтверждён. Откройте письмо от Supabase или в Dashboard: Authentication → Users → подтвердите вручную. Для тестов можно отключить «Confirm email» в Authentication → Providers → Email.';
+  }
+  if (/invalid login|invalid credentials|invalid_grant|wrong password|email or password/.test(m) || status === 400) {
+    return 'Неверный email или пароль для Supabase, либо аккаунт не подтверждён (см. Authentication → Users). Если регистрировались только локально — войдите логином из формы, не только email.';
+  }
+  return (err && err.message) ? err.message : 'Не удалось войти через Supabase.';
+}
+
+async function doLogin() {
+  if (window.__skladLoginBusy) return;
+  window.__skladLoginBusy = true;
+  try {
   const login = document.getElementById('login-user').value.trim();
   const pass = document.getElementById('login-pass').value.trim();
+
+  if (!login || !pass) {
+    showLoginError('Введите логин и пароль');
+    return;
+  }
+
+  const openSession = (displayName) => {
+    addAudit(`${displayName} вошёл в систему`, 'auth');
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    setupUI();
+    startRealtime();
+    nav('dashboard');
+  };
+
+  const openFromServerUser = (u) => {
+    currentUser = {
+      id: u.id,
+      name: u.full_name || u.username || u.email || 'Пользователь',
+      login: u.username || u.email,
+      pass: pass,
+      role: 'admin',
+      email: u.email,
+      phone: u.phone,
+      active: true,
+      avatar: initialsFromName(u.full_name || u.username || u.email)
+    };
+    openSession(currentUser.name);
+  };
+
+  let serverPayload = null;
+  let serverStatus = null;
+  try {
+    const resp = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, password: pass })
+    });
+    serverStatus = resp.status;
+    if (resp.ok) {
+      serverPayload = await resp.json();
+    } else if (resp.status === 401) {
+      await resp.json().catch(() => null);
+    }
+  } catch (e) {
+    console.warn('/api/login request failed', e);
+  }
+
+  const serverUser = serverPayload && serverPayload.ok && serverPayload.user ? serverPayload.user : null;
+
+  // Сначала пробуем Supabase (профиль + роль), если есть клиент и подошёл пароль к облаку
+  if (typeof window.supabaseClient !== 'undefined' && window.supabaseClient && window.supabaseClient.auth) {
+    const emailForSb = serverUser
+      ? String(serverUser.email || '').trim().toLowerCase()
+      : (login.includes('@') ? String(login).trim().toLowerCase() : null);
+
+    if (emailForSb) {
+      const { data, error } = await window.supabaseClient.auth.signInWithPassword({
+        email: emailForSb,
+        password: pass
+      });
+      if (!error && data && data.user) {
+        const { data: prof, error: pErr } = await window.supabaseClient
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .maybeSingle();
+        if (pErr) console.warn('profiles:', pErr);
+        const p = prof || {};
+        const role = normalizeProfileRole(p.role);
+        currentUser = {
+          id: data.user.id,
+          name: p.full_name || p.username || emailForSb,
+          login: p.username || emailForSb,
+          pass: pass,
+          role,
+          email: p.email || emailForSb,
+          phone: p.phone,
+          company: p.company,
+          active: true,
+          avatar: initialsFromName(p.full_name || p.username || emailForSb)
+        };
+        openSession(currentUser.name);
+        return;
+      }
+      if (login.includes('@') && !serverUser) {
+        showLoginError(supabaseLoginHint(error));
+        return;
+      }
+    }
+  }
+
+  if (serverUser) {
+    openFromServerUser(serverUser);
+    return;
+  }
+
+  if (serverStatus === 401) {
+    showLoginError('Неверный логин или пароль');
+    return;
+  }
+
   if(!DB.users) initData();
   const user = DB.users.find(u => u.login===login);
-  if(!user) { showLoginError('Пользователь не найден'); return; }
+  if(!user) {
+    showLoginError('Пользователь не найден. Для аккаунта с сайта укажите логин или email и пароль регистрации.');
+    return;
+  }
   if(user.pass !== pass) { showLoginError('Неверный пароль'); return; }
   const isBlocked = user.active === false;
   currentUser = user;
@@ -171,6 +298,9 @@ function doLogin() {
   } else {
     startRealtime();
   }
+  } finally {
+    window.__skladLoginBusy = false;
+  }
 }
 
 function showLoginError(msg) {
@@ -183,6 +313,9 @@ function showLoginError(msg) {
 function doLogout() {
   if(!confirm('Выйти из системы?')) return;
   addAudit(`${currentUser.name} вышел из системы`, 'auth');
+  if (typeof window.supabaseClient !== 'undefined' && window.supabaseClient && window.supabaseClient.auth) {
+    window.supabaseClient.auth.signOut().catch(()=>{});
+  }
   saveDB();
   clearInterval(realtimeInterval);
   document.getElementById('app').style.display = 'none';

@@ -8,6 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="client.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1d24'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='%2338bdf8' font-size='16' font-family='system-ui'%3ES%3C/text%3E%3C/svg%3E">
 </head>
 <body>
   <div class="client-page">
@@ -90,6 +91,10 @@
                 <input id="company" name="company" type="text" autocomplete="organization" placeholder="ООО «Пример»">
               </div>
               <div class="form-group">
+                <label for="login">Логин *</label>
+                <input id="login" name="username" type="text" required autocomplete="username" placeholder="логин для входа">
+              </div>
+              <div class="form-group">
                 <label for="email">Email *</label>
                 <input id="email" name="email" type="email" required autocomplete="email" placeholder="you@company.ru">
               </div>
@@ -114,32 +119,140 @@
     </footer>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
   <script>
-    const SUPABASE_URL = 'https://igoiopcrhodnwwatbyag.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_varC-v-ErJbj0tfaeCt_Uw__R2xWdpf';
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    (function(){
+      var localPath = 'vendor/supabase-js.js';
+      var cdnPath = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js';
+      var loadScript = function(src, onload, onerror){
+        var s = document.createElement('script');
+        s.src = src;
+        s.onload = onload;
+        s.onerror = onerror;
+        document.head.appendChild(s);
+      };
+
+      // try local copy first (same-origin avoids tracking prevention), then fallback to CDN
+      loadScript(localPath, function(){ console.log('Supabase loaded from', localPath); if (typeof window.initSupabase === 'function') window.initSupabase(); }, function(){
+        console.warn('Local supabase.js not found, falling back to CDN');
+        loadScript(cdnPath, function(){ console.log('Supabase loaded from CDN'); if (typeof window.initSupabase === 'function') window.initSupabase(); }, function(){ console.error('Failed to load supabase from CDN'); });
+      });
+    })();
+  </script>
+  <script>
+    function initSupabase(){
+      // Только publishable / anon для браузера. Ключ sb_secret_* сюда не вставляйте — он только в .env на сервере.
+      const SUPABASE_URL = 'https://igoiopcrhodnwwatbyag.supabase.co';
+      const SUPABASE_ANON_KEY = 'sb_publishable_varC-v-ErJbj0tfaeCt_Uw__R2xWdpf';
+      try {
+        if (typeof supabase !== 'undefined' && supabase && typeof supabase.createClient === 'function') {
+          window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          console.log('Supabase client initialized');
+        } else {
+          window.supabaseClient = null;
+        }
+      } catch (e) {
+        console.warn('Failed to initialize Supabase client', e);
+        window.supabaseClient = null;
+      }
+
+      // If page opened via file:// — many browsers block storage & cookies for CDN scripts.
+      if (window.location.protocol === 'file:') {
+        console.warn('Page opened via file:// — some features may be blocked by the browser. Run a local HTTP server.');
+        try {
+          var _msg = document.getElementById('reg-msg');
+          var _form = document.getElementById('client-register-form');
+          if (_msg) {
+            _msg.className = 'client-msg error';
+            _msg.textContent = 'Страница открыта локально (file://). Запустите локальный HTTP‑сервер и откройте http://localhost:8080 для корректной работы.';
+            _msg.style.display = 'block';
+          }
+          if (_form) {
+            var _btn = _form.querySelector('button[type="submit"]');
+            if (_btn) _btn.disabled = true;
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      // If Supabase client didn't initialize, show a clear message and disable the form
+      if (!window.supabaseClient) {
+        console.warn('Supabase client not available');
+        try {
+          var _msg2 = document.getElementById('reg-msg');
+          var _form2 = document.getElementById('client-register-form');
+          if (_msg2) {
+            _msg2.className = 'client-msg error';
+            _msg2.textContent = 'Клиент Supabase не загружен. Проверьте подключение к CDN или откройте сайт по http(s).';
+            _msg2.style.display = 'block';
+          }
+          if (_form2) {
+            var _btn2 = _form2.querySelector('button[type="submit"]');
+            if (_btn2) _btn2.disabled = true;
+          }
+        } catch (e) { /* ignore */ }
+      }
+    }
+    window.initSupabase = initSupabase;
   </script>
 
   <script>
     (function () {
       var form = document.getElementById('client-register-form');
       var msg = document.getElementById('reg-msg');
+      var isLoading = false; // protect against repeat submits
 
       function apiBase() {
         if (window.location.protocol === 'file:') return 'http://localhost:3000';
         return '';
       }
 
+      async function universalSignUp(email, password) {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient && supabaseClient.auth && typeof supabaseClient.auth.signUp === 'function') {
+          return await supabaseClient.auth.signUp({ email: email, password: password });
+        }
+        if (typeof supabase !== 'undefined' && supabase && supabase.auth && typeof supabase.auth.signUp === 'function') {
+          return await supabase.auth.signUp({ email: email, password: password });
+        }
+        throw new Error('No Supabase client available for signUp');
+      }
+
+      function getDbClient() {
+        if (typeof supabaseClient !== 'undefined' && supabaseClient) return supabaseClient;
+        if (typeof supabase !== 'undefined' && supabase) return supabase;
+        return null;
+      }
+
+      /** Убирает невидимые символы и пробелы — иначе Supabase часто даёт «invalid format». */
+      function normalizeFormEmail(raw) {
+        var s = String(raw || '').trim().toLowerCase();
+        try { if (s.normalize) s = s.normalize('NFC'); } catch (err) { /* ignore */ }
+        s = s.replace(/[\u200b-\u200d\ufeff\u00a0]/g, '').replace(/\s+/g, '');
+        return s;
+      }
+
+      /** Формат, который обычно принимает Supabase Auth (латиница, цифры, один @, есть точка в домене). */
+      function isSupabaseCompatibleEmail(e) {
+        if (!e || e.length < 5 || e.length > 254) return false;
+        var at = e.indexOf('@');
+        if (at < 1 || at !== e.lastIndexOf('@')) return false;
+        var local = e.slice(0, at);
+        var dom = e.slice(at + 1);
+        if (dom.indexOf('.') < 0 || local.indexOf('..') >= 0 || dom.indexOf('..') >= 0) return false;
+        if (/[^\x00-\x7f]/.test(e)) return false;
+        return /^[a-z0-9][a-z0-9._%+\-]*@[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(e);
+      }
+
       form.addEventListener('submit', async function (e) {
         e.preventDefault();
+        if (isLoading) return;
+        isLoading = true;
         msg.className = 'client-msg';
         msg.textContent = '';
         msg.style.display = 'none';
 
         var full_name = (document.querySelector('#name') && document.querySelector('#name').value || '').trim();
         var company = (document.querySelector('#company') && document.querySelector('#company').value || '').trim();
-        var email = (document.querySelector('#email') && document.querySelector('#email').value || '').trim();
+        var username = (document.querySelector('#login') && document.querySelector('#login').value || '').trim();
+        var email = normalizeFormEmail(document.querySelector('#email') && document.querySelector('#email').value || '');
         var phone = (document.querySelector('#phone') && document.querySelector('#phone').value || '').trim();
         var password = (document.querySelector('#password') && document.querySelector('#password').value) || '';
 
@@ -157,62 +270,205 @@
           msg.style.display = 'block';
           btn.disabled = false;
           btn.textContent = originalLabel;
+          isLoading = false;
           return;
         }
 
-        const { data, error } = await supabase.auth.signUp({ email: email, password: password });
+        if (!isSupabaseCompatibleEmail(email)) {
+          msg.className = 'client-msg error';
+          msg.textContent = 'Укажите email латиницей в формате user@mail.com (без кириллицы и лишних символов). Проверьте поле «Email», не перепутайте с логином.';
+          msg.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = originalLabel;
+          isLoading = false;
+          return;
+        }
+
+        // 1) Регистрация — используем проверку и логирование
+        const signupClient = (typeof window.supabaseClient !== 'undefined' && window.supabaseClient) ? window.supabaseClient : (typeof supabase !== 'undefined' ? supabase : null);
+        if (!signupClient) {
+          console.error('No Supabase client available');
+          msg.className = 'client-msg error';
+          msg.textContent = 'Клиент Supabase не доступен.';
+          msg.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = originalLabel;
+          isLoading = false;
+          return;
+        }
+
+        // Вставляем предложенный блок проверки/логирования
+        const { data, error } = await signupClient.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name || null,
+              company: company || null,
+              phone: phone || null,
+              username: username || null,
+              role: 'admin'
+            }
+          }
+        });
+
+        console.log("DATA:", data);
+        console.log("ERROR:", error);
+
         if (error) {
-          msg.className = 'client-msg error';
-          msg.textContent = error.message || 'Ошибка регистрации';
-          msg.style.display = 'block';
+          console.error('SIGNUP ERROR:', error);
+          var showRegErr = function (text) {
+            msg.className = 'client-msg error';
+            msg.textContent = text;
+            msg.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = originalLabel;
+            isLoading = false;
+          };
+          // If Supabase rate-limits signups, try local server fallback (/api/register)
+          var rateMsg = String(error.message || '');
+          if (error.status === 429 || /rate limit/i.test(rateMsg)) {
+            console.warn('Supabase rate limit detected — attempting fallback to local /api/register');
+              try {
+              const fallbackBody = { email: email, password: password, full_name: name, company: company, phone: phone, username: username };
+              console.log('Fallback request body:', JSON.stringify(fallbackBody));
+              const resp = await fetch(apiBase() + '/api/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fallbackBody)
+              });
+              const j = await resp.json().catch(()=>({ ok: false, error: 'Invalid JSON response' }));
+              console.log('Fallback response:', j);
+              if (resp.ok && j.ok) {
+                msg.className = 'client-msg ok';
+                var sbOk = j.supabase_user === true;
+                msg.textContent = (j.message || 'Регистрация выполнена локально.') + (sbOk
+                  ? ' Учётная запись также создана в Supabase (через сервер).'
+                  : ' В Supabase с браузера лимит не позволил; пользователь только в локальной базе. Добавьте в .env сервера SUPABASE_URL и секретный ключ (sb_secret_… из Settings → API, не anon/publishable), затем перезапустите node server.js — тогда при этой регистрации пользователь продублируется в облако.');
+                msg.style.display = 'block';
+                try { form.reset(); } catch(e){}
+                var fbLogin = (j.username || username || '').trim();
+                try {
+                  const loginResp = await fetch(apiBase() + '/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login: fbLogin, password: password })
+                  });
+                  if (loginResp.ok) {
+                    try { sessionStorage.setItem('skladpro_autologin', JSON.stringify({ login: fbLogin, password: password })); } catch (e2) {}
+                    isLoading = false;
+                    window.location.replace('admin.html');
+                    return;
+                  } else {
+                    try { sessionStorage.setItem('skladpro_prefill_login', fbLogin); } catch (e2) {}
+                    setTimeout(function(){ window.location.href = 'admin.html'; }, 600);
+                  }
+                } catch (e) {
+                  console.warn('Local login attempt failed', e);
+                  try { sessionStorage.setItem('skladpro_prefill_login', fbLogin); } catch (e2) {}
+                  setTimeout(function(){ window.location.href = 'admin.html'; }, 600);
+                }
+              } else {
+                msg.className = 'client-msg error';
+                msg.textContent = j.error || 'Ошибка регистрации (локальная).';
+                msg.style.display = 'block';
+              }
+            } catch (e) {
+              console.error('Fallback to local register failed', e);
+              showRegErr((error.message || 'Ошибка регистрации') + ' Локальный fallback не сработал — проверьте, что сервер запущен (node server.js).');
+            }
+          } else {
+            var hint = '';
+            if (/already registered|already been registered|already exists|user already|email address is already/i.test(rateMsg)) {
+              hint = ' Этот email уже зарегистрирован в Supabase — откройте вход или укажите другой email (раздел Authentication → Users).';
+            } else if (/invalid api key|jwt|apikey|not authorized|401/i.test(rateMsg)) {
+              hint = ' Проверьте URL проекта и ключ anon/publishable в коде (Settings → API).';
+            } else if (/invalid format|validate email|unable to validate email/i.test(rateMsg)) {
+              hint = ' Обычно: кириллица в адресе, лишний пробел/символ, нет точки в домене (@mail без .com) или в поле «Email» по ошибке вставлен логин. Исправьте и попробуйте снова.';
+            }
+            showRegErr((rateMsg || 'Ошибка регистрации в Supabase.') + hint);
+          }
+
+          if (!isLoading) return;
           btn.disabled = false;
           btn.textContent = originalLabel;
+          isLoading = false;
           return;
         }
 
-        const user = data.user ?? data.session?.user ?? data;
+        const user = data.user ?? data.session?.user;
+        console.log("USER:", user);
 
-        if (!user || !user.id) {
-          console.warn('No user id after signUp', data);
-          msg.className = 'client-msg warning';
-          msg.textContent = 'Регистрация прошла, но не удалось получить id. Сейчас перенаправим на страницу входа.';
+        if (!user) {
+          msg.className = 'client-msg error';
+          msg.textContent = 'Supabase не вернул пользователя сразу. Часто так при обязательном подтверждении создайте аккаунт: проверьте письмо и пункт Authentication → Users. Если список пуст — в проекте, скорее всего, падает триггер profiles (в таблице должна быть колонка role; выполните SQL из SUPABASE_PROFILES.sql в вашей базе).';
           msg.style.display = 'block';
-          try { form.reset(); } catch (e) { }
-          setTimeout(function () { window.location.href = 'admin.html'; }, 1200);
           btn.disabled = false;
           btn.textContent = originalLabel;
+          isLoading = false;
           return;
         }
 
-        const { error: profileError } = await supabase.from('profiles').insert([{
-          id: user.id,
-          full_name: name,
-          company: company,
-          phone: phone,
-          email: email
-        }]);
+        // Профиль в public.profiles создаётся триггером handle_new_user (см. SUPABASE_PROFILES.sql);
+        // метаданные уходят в raw_user_meta_data через options.data выше — вставка из браузера не нужна и ломалась из‑за RLS без сессии.
 
-        if (profileError) {
-          console.error('Profile insert error', profileError);
-          msg.className = 'client-msg error';
-          msg.textContent = 'Пользователь создан, но профиль не сохранён: ' + (profileError.message || '');
-          msg.style.display = 'block';
-          // Redirect anyway so user can sign in; admin can check DB later
-          setTimeout(function () { window.location.href = 'admin.html'; }, 1800);
-        } else {
-          msg.className = 'client-msg ok';
-          msg.textContent = 'Регистрация успешна. Сейчас перенаправим вас на страницу входа.';
-          msg.style.display = 'block';
+        msg.className = 'client-msg ok';
+        msg.textContent = data.session
+          ? 'Регистрация успешна. Сейчас перенаправим вас на страницу входа.'
+          : 'Аккаунт создан. Если в проекте включено подтверждение email — откройте письмо; затем войдите.';
+        msg.style.display = 'block';
 
-          try { form.reset(); } catch (e) { }
-          var firstInput = form.querySelector('input');
-          if (firstInput) firstInput.focus();
+        try { form.reset(); } catch (e) { }
+        var firstInput = form.querySelector('input');
+        if (firstInput) firstInput.focus();
 
-          setTimeout(function () {
-            window.location.href = 'admin.html';
-          }, 1200);
+        var localLogin = (username || '').trim();
+        try {
+          const regResp = await fetch(apiBase() + '/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: password, full_name: name, company: company, phone: phone, username: username })
+          });
+          const regJson = await regResp.json().catch(function () { return null; });
+          if (regJson && regJson.username) {
+            localLogin = String(regJson.username).trim();
+          }
+          if (!regResp.ok || !regJson || !regJson.ok) {
+            msg.className = 'client-msg error';
+            msg.textContent = ((regJson && regJson.error) ? regJson.error : 'Не удалось сохранить учётную запись на локальном сервере.')
+              + ' В Supabase аккаунт мог быть создан — проверьте почту или войдите, если уже подтверждали email.';
+            msg.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = originalLabel;
+            isLoading = false;
+            return;
+          }
+        } catch (regErr) { /* сервер может быть выключен */ }
+
+        try {
+          const loginResp = await fetch(apiBase() + '/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login: localLogin, password: password })
+          });
+          if (loginResp.ok) {
+            try {
+              sessionStorage.setItem('skladpro_autologin', JSON.stringify({ login: localLogin, password: password }));
+            } catch (sErr) {}
+            window.location.replace('admin.html');
+          } else {
+            try { sessionStorage.setItem('skladpro_prefill_login', localLogin); } catch (sErr) {}
+            msg.textContent = 'Аккаунт создан. Откройте панель и войдите с логином «' + localLogin + '» (запустите локальный сервер на порту 3000, если вход не удался).';
+            setTimeout(function () { window.location.href = 'admin.html'; }, 900);
+          }
+        } catch (e) {
+          console.warn('Local login after signup failed', e);
+          try { sessionStorage.setItem('skladpro_prefill_login', localLogin); } catch (sErr) {}
+          setTimeout(function () { window.location.href = 'admin.html'; }, 900);
         }
 
+        // restore
+        isLoading = false;
         btn.disabled = false;
         btn.textContent = originalLabel;
       });

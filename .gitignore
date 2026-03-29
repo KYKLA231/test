@@ -1,7 +1,4 @@
 node_modules/
-data/*.db
-.DS_Store
-Thumbs.db
-*.log
 .env
-.env.local
+data/*.db
+data/*.db-journal

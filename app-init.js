@@ -1,4 +1,4 @@
-﻿function startRealtime() {
+function startRealtime() {
   realtimeInterval = setInterval(()=>{
     document.getElementById('last-update').textContent = new Date().toLocaleTimeString('ru');
     
@@ -21,10 +21,40 @@
     }
   }, 8000);
 }
-window.addEventListener('DOMContentLoaded', ()=>{
+window.addEventListener('DOMContentLoaded', async ()=>{
   if(!loadDB()) initData();
   if(!DB.suppliers) DB.suppliers = JSON.parse(JSON.stringify(SUPPLIERS_DEFAULT));
   renderNotifications();
+
+  try {
+    var autoRaw = sessionStorage.getItem('skladpro_autologin');
+    if (autoRaw) {
+      sessionStorage.removeItem('skladpro_autologin');
+      var creds = JSON.parse(autoRaw);
+      if (creds && creds.login && creds.password) {
+        var deadline = Date.now() + 6000;
+        while (Date.now() < deadline && window.supabaseClient === undefined) {
+          await new Promise(function (r) { setTimeout(r, 40); });
+        }
+        var lu = document.getElementById('login-user');
+        var lp = document.getElementById('login-pass');
+        if (lu) lu.value = creds.login;
+        if (lp) lp.value = creds.password;
+        document.querySelectorAll('.role-btn').forEach(function (b) { b.classList.remove('active'); });
+        var adminBtn = document.querySelector('.role-btn');
+        if (adminBtn) adminBtn.classList.add('active');
+        selectedRole = 'admin';
+        await doLogin();
+        return;
+      }
+    }
+    var prefill = sessionStorage.getItem('skladpro_prefill_login');
+    if (prefill) {
+      sessionStorage.removeItem('skladpro_prefill_login');
+      var lu2 = document.getElementById('login-user');
+      if (lu2) lu2.value = prefill;
+    }
+  } catch (_) { /* ignore */ }
 });
 
 document.addEventListener('keydown', e=>{

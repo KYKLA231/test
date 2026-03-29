@@ -16,8 +16,8 @@
     <div class="login-logo">Склад Pro</div>
     
     <div class="login-field">
-      <label>Логин</label>
-      <input type="text" id="login-user" value="admin" placeholder="Введите логин">
+      <label>Логин или email</label>
+      <input type="text" id="login-user" value="admin" placeholder="Логин, email (Supabase) или admin">
     </div>
     <div class="login-field">
       <label>Пароль</label>
@@ -779,6 +779,36 @@
   </div>
 </div>
 
+<script>
+(function(){
+  var localPath = 'vendor/supabase-js.js';
+  var cdnPath = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js';
+  var s = document.createElement('script');
+  s.src = localPath;
+  s.onload = function(){ if (typeof window.initSupabase === 'function') window.initSupabase(); };
+  s.onerror = function(){
+    var t = document.createElement('script');
+    t.src = cdnPath;
+    t.onload = function(){ if (typeof window.initSupabase === 'function') window.initSupabase(); };
+    document.head.appendChild(t);
+  };
+  document.head.appendChild(s);
+})();
+function initSupabase(){
+  var SUPABASE_URL = 'https://igoiopcrhodnwwatbyag.supabase.co';
+  var SUPABASE_ANON_KEY = 'sb_publishable_varC-v-ErJbj0tfaeCt_Uw__R2xWdpf';
+  try {
+    if (typeof supabase !== 'undefined' && supabase && typeof supabase.createClient === 'function') {
+      window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } else {
+      window.supabaseClient = null;
+    }
+  } catch (e) {
+    window.supabaseClient = null;
+  }
+}
+window.initSupabase = initSupabase;
+</script>
 <script src="app-core.js"></script>
 <script src="app-categories.js"></script>
 <script src="app-supplies.js"></script>
