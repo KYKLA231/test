@@ -1,9 +1,3 @@
--- Скрипт для SQL Editor в Supabase (оставьте RLS; профиль создаётся триггером при регистрации).
---
--- Если новые пользователи НЕ появляются в Authentication → Users:
--- триггер handle_new_user() вставляет колонку role. Убедитесь, что в public.profiles есть role
--- (блок ALTER … add column ниже) и что функция/триггер выполнены без ошибки (Database → Postgres Logs).
-
 create extension if not exists "pgcrypto";
 
 create table if not exists public.profiles (
@@ -17,7 +11,6 @@ create table if not exists public.profiles (
   created_at timestamptz default now()
 );
 
--- Если таблица profiles уже существовала без части колонок, CREATE TABLE не меняет её — добавляем поля вручную.
 alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists full_name text;
 alter table public.profiles add column if not exists company text;
@@ -34,7 +27,6 @@ drop policy if exists "insert_own_profile" on public.profiles;
 drop policy if exists "update_own_profile" on public.profiles;
 drop policy if exists "select_own_profile" on public.profiles;
 
--- Вставка из браузера разрешена только когда JWT уже есть и совпадает с id строки.
 create policy "insert_own_profile" on public.profiles
   for insert
   with check (auth.uid() = id);
@@ -48,7 +40,6 @@ create policy "select_own_profile" on public.profiles
   for select
   using (auth.uid() = id);
 
--- Надёжное создание профиля при любом новом пользователе Auth (обходит RLS).
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -93,5 +84,4 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- Уже существующие строки без роли (выполните после добавления колонки role):
 update public.profiles set role = 'admin' where role is null or trim(role) = '';

@@ -5,7 +5,6 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const Database = require('better-sqlite3');
 
-/** Простая подгрузка .env без пакета dotenv (не коммитьте .env с секретами). */
 function loadDotEnv() {
   try {
     const envPath = path.join(__dirname, '.env');
@@ -48,7 +47,6 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_clients_email ON clients(email);
 `);
 
-// Ensure `username` column exists (migration for existing DBs)
 try {
   const info = db.prepare("PRAGMA table_info(clients)").all();
   const hasUsername = info.some(col => col.name === 'username');
@@ -65,10 +63,6 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '64kb' }));
 
-/**
- * Создаёт пользователя в Supabase Auth через Admin API (секретный ключ — только на сервере).
- * Обходит клиентский rate limit на /auth/v1/signup.
- */
 async function syncUserToSupabase({ email, password, fullName, company, phone, username }) {
   const baseUrl = String(process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');
   const secret = String(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -118,7 +112,6 @@ app.post('/api/register', async (req, res) => {
   const email = String(body.email || '').trim().toLowerCase();
   const password = String(body.password || '');
   const fullName = String(body.full_name || '').trim();
-  // Accept either `username` or `login` from client payload
   const username = String(body.username || body.login || '').trim() || null;
   const company = String(body.company || '').trim() || null;
   const phone = String(body.phone || '').trim() || null;
@@ -137,7 +130,6 @@ app.post('/api/register', async (req, res) => {
 
   let attemptedUsername = null;
   try {
-    // If username not provided, generate one from email prefix and ensure uniqueness
     let finalUsername = username;
     if (!finalUsername) {
       const prefix = email.split('@')[0].replace(/[^a-zA-Z0-9_\-\.]/g, '').toLowerCase() || 'user';
@@ -149,6 +141,10 @@ app.post('/api/register', async (req, res) => {
         suffix += 1;
         candidate = prefix + suffix;
       }
+    }
+    finalUsername = String(finalUsername || '').trim();
+    if (!finalUsername) {
+      return res.status(400).json({ ok: false, error: 'Укажите логин или корректный email.' });
     }
     attemptedUsername = finalUsername;
 
@@ -176,43 +172,52 @@ app.post('/api/register', async (req, res) => {
       username: finalUsername,
       id: info.lastInsertRowid,
       supabase_user: sb.created === true,
+      supabase_env_missing: sb.skipped === true,
+      supabase_duplicate: sb.duplicate === true,
     });
   } catch (e) {
-    // If unique constraint error, try to handle gracefully: if the email exists but has no username
     if (e && e.code === 'SQLITE_CONSTRAINT_UNIQUE') {
       try {
         const errDetail = String(e.message || '');
-        const failedOnUsername = /clients\.username/i.test(errDetail);
+        console.warn('[/api/register] UNIQUE:', errDetail);
 
-        if (failedOnUsername) {
-          return res.status(409).json({ ok: false, error: 'Этот логин уже занят. Укажите другой логин.' });
-        }
-
-        const existing = db.prepare('SELECT id, username FROM clients WHERE email = ?').get(email);
-        if (existing) {
-          // If existing record has no username and client provided one, update it
-          if ((!existing.username || String(existing.username).trim() === '') && username) {
+        const existingByEmail = db.prepare('SELECT id, username, email FROM clients WHERE lower(email) = ?').get(email.toLowerCase());
+        if (existingByEmail) {
+          if (username && (!existingByEmail.username || String(existingByEmail.username).trim() === '')) {
             try {
-              db.prepare('UPDATE clients SET username = ? WHERE id = ?').run(username, existing.id);
-              return res.status(200).json({ ok: true, message: 'Существующая запись обновлена: логин сохранён.' });
+              db.prepare('UPDATE clients SET username = ? WHERE id = ?').run(String(username).trim(), existingByEmail.id);
+              return res.status(200).json({ ok: true, message: 'Существующая запись обновлена: логин сохранён.', username: String(username).trim(), id: existingByEmail.id });
             } catch (ue) {
               if (ue && ue.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-                return res.status(409).json({ ok: false, error: 'Этот логин уже занят.' });
+                return res.status(409).json({ ok: false, error: 'Этот логин уже занят. Укажите другой логин.', code: 'USERNAME_TAKEN' });
               }
               console.error('Username update failed', ue);
               return res.status(500).json({ ok: false, error: 'Ошибка сервера при обновлении логина.' });
             }
           }
-          return res.status(409).json({ ok: false, error: 'Этот email уже зарегистрирован.' });
+          return res.status(409).json({
+            ok: false,
+            error: 'Этот email уже зарегистрирован. Войдите или укажите другой email.',
+            code: 'EMAIL_EXISTS',
+          });
+        }
+
+        const failedOnUsername =
+          /clients\.username|idx_clients_username/i.test(errDetail) ||
+          (/UNIQUE constraint failed/i.test(errDetail) && /username/i.test(errDetail) && !/email/i.test(errDetail));
+
+        if (failedOnUsername && attemptedUsername) {
+          return res.status(409).json({ ok: false, error: 'Этот логин уже занят. Укажите другой логин.', code: 'USERNAME_TAKEN' });
         }
 
         if (attemptedUsername) {
-          const rowByLogin = db.prepare('SELECT email FROM clients WHERE username = ? COLLATE NOCASE').get(attemptedUsername);
-          if (rowByLogin) {
-            return res.status(409).json({ ok: false, error: 'Этот логин уже занят. Укажите другой логин.' });
+          const rowByLogin = db.prepare('SELECT id, email FROM clients WHERE username = ? COLLATE NOCASE').get(attemptedUsername);
+          if (rowByLogin && String(rowByLogin.email || '').toLowerCase() !== email.toLowerCase()) {
+            return res.status(409).json({ ok: false, error: 'Этот логин уже занят. Укажите другой логин.', code: 'USERNAME_TAKEN' });
           }
         }
-        return res.status(409).json({ ok: false, error: 'Такой email или логин уже используется.' });
+
+        return res.status(409).json({ ok: false, error: 'Такой email или логин уже используется.', code: 'DUPLICATE' });
       } catch (he) {
         console.error('Constraint handling failed', he);
         return res.status(500).json({ ok: false, error: 'Ошибка сервера.' });
@@ -227,7 +232,6 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'sklad-pro-clients' });
 });
 
-// Login via username (not email) — verifies password against stored hash
 app.post('/api/login', (req, res) => {
   const body = req.body || {};
   const login = String(body.login || body.username || '').trim();
@@ -250,7 +254,6 @@ app.post('/api/login', (req, res) => {
     const valid = bcrypt.compareSync(password, row.password_hash);
     if (!valid) return res.status(401).json({ ok: false, error: 'Неверный пароль.' });
 
-    // Successful login — return minimal user info (no password)
     const user = {
       id: row.id,
       email: row.email,

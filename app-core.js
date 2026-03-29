@@ -95,7 +95,6 @@ function loadDB() {
   return false;
 }
 
-/** База URL для /api/* на проде (Netlify = только статика). Совпадает с index.html apiBase(). */
 function skladApiBase() {
   if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
     return 'http://localhost:3000';
@@ -170,7 +169,6 @@ function normalizeProfileRole(r) {
   return 'admin';
 }
 
-/** Расшифровка типичных ошибок /auth/v1/token и signInWithPassword */
 function supabaseLoginHint(err) {
   const m = String((err && err.message) ? err.message : '').toLowerCase();
   const status = err && err.status;
@@ -239,7 +237,6 @@ async function doLogin() {
 
   const serverUser = serverPayload && serverPayload.ok && serverPayload.user ? serverPayload.user : null;
 
-  // Сначала пробуем Supabase (профиль + роль), если есть клиент и подошёл пароль к облаку
   if (typeof window.supabaseClient !== 'undefined' && window.supabaseClient && window.supabaseClient.auth) {
     const emailForSb = serverUser
       ? String(serverUser.email || '').trim().toLowerCase()
@@ -353,7 +350,16 @@ const panelTitles = {
   reports:'Отчёты', audit:'Аудит', users:'Пользователи', settings:'Настройки'
 };
 
+function toggleMobileNav() {
+  document.body.classList.toggle('mobile-nav-open');
+}
+
+function closeMobileNav() {
+  document.body.classList.remove('mobile-nav-open');
+}
+
 function nav(panel) {
+  document.body.classList.remove('mobile-nav-open');
   document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const p = document.getElementById(`panel-${panel}`);

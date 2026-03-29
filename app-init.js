@@ -54,11 +54,12 @@ window.addEventListener('DOMContentLoaded', async ()=>{
       var lu2 = document.getElementById('login-user');
       if (lu2) lu2.value = prefill;
     }
-  } catch (_) { /* ignore */ }
+  } catch (_) {}
 });
 
 document.addEventListener('keydown', e=>{
   if(e.key==='Escape') {
+    if (typeof closeMobileNav === 'function') closeMobileNav();
     document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));
     if(notifOpen) { notifOpen=false; document.getElementById('notif-panel').classList.remove('open'); }
   }

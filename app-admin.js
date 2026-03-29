@@ -1,4 +1,4 @@
-﻿function renderAudit() {
+function renderAudit() {
   const log = document.getElementById('audit-log');
   const typeColors = {create:'var(--accent-green)',update:'var(--accent)',delete:'var(--accent-red)',auth:'var(--accent-3)',supply:'var(--accent-2)',order:'var(--accent-purple)',settings:'var(--text-1)'};
   log.innerHTML = [...DB.audit].reverse().map(e=>`
@@ -128,6 +128,7 @@ function addNotification(text, type='info') {
 }
 
 function toggleNotif() {
+  if (typeof closeMobileNav === 'function') closeMobileNav();
   notifOpen = !notifOpen;
   document.getElementById('notif-panel').classList.toggle('open', notifOpen);
   if(notifOpen) renderNotifications();

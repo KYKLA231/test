@@ -1,9 +1,5 @@
--- Выполнить в SQL Editor, если в Authentication → Users есть люди, а в public.profiles для них нет строк
--- (триггер не сработал или схема без колонки role и т.п.).
-
 alter table public.profiles add column if not exists role text default 'admin';
 
--- Если full_name в таблице NOT NULL, пустое имя из metadata заменяем на часть email или «Пользователь»
 insert into public.profiles (id, email, full_name, company, phone, username, role)
 select
   u.id,

@@ -1,5 +1,7 @@
 .client-page {
   min-height: 100vh;
+  min-height: 100dvh;
+  max-height: -webkit-fill-available;
   display: flex;
   flex-direction: column;
 }
@@ -11,10 +13,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 28px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: max(14px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) 14px max(20px, env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--border);
   background: rgba(20, 24, 31, 0.92);
   backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .client-brand {
@@ -279,7 +284,8 @@
   color: #a3d4b0;
 }
 
-.client-msg.err {
+.client-msg.err,
+.client-msg.error {
   display: block;
   background: rgba(201, 122, 109, 0.1);
   border: 1px solid rgba(201, 122, 109, 0.35);
@@ -288,7 +294,7 @@
 
 .client-footer {
   margin-top: auto;
-  padding: 22px 28px;
+  padding: 18px max(20px, env(safe-area-inset-right, 0px)) max(22px, env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
   border-top: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-3);
@@ -305,4 +311,46 @@
 
 .client-list li {
   margin-bottom: 8px;
+}
+
+@media (max-width: 640px) {
+  .client-hero {
+    padding: max(40px, env(safe-area-inset-top, 0px)) max(18px, env(safe-area-inset-right, 0px)) 36px max(18px, env(safe-area-inset-left, 0px));
+  }
+  .client-section {
+    padding: 28px max(18px, env(safe-area-inset-right, 0px)) 28px max(18px, env(safe-area-inset-left, 0px));
+  }
+  .client-nav {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .client-nav a {
+    padding: 10px 12px;
+    font-size: 13px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .client-grid {
+    grid-template-columns: 1fr;
+  }
+  .client-register {
+    padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px));
+  }
+  .client-form input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .client-btn {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 400px) {
+  .client-brand {
+    width: 100%;
+  }
+  .client-header {
+    padding-top: max(12px, env(safe-area-inset-top, 0px));
+  }
 }
