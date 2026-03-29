@@ -62,6 +62,15 @@ try {
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '64kb' }));
+app.use((req, res, next) => {
+  const p = String(req.path || '').toLowerCase();
+  if (p === '/' || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
 
 async function syncUserToSupabase({ email, password, fullName, company, phone, username }) {
   const baseUrl = String(process.env.SUPABASE_URL || '').trim().replace(/\/$/, '');

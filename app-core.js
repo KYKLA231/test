@@ -289,6 +289,29 @@ function normalizeProfileRole(r) {
   return 'admin';
 }
 
+function isUuidLike(v) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(v || ''));
+}
+
+async function fetchOwnProfileById(userId) {
+  if (!isUuidLike(userId)) return null;
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('profiles')
+      .select('id,email,full_name,username,phone,company,role')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      console.warn('profiles:', error);
+      return null;
+    }
+    return data || null;
+  } catch (e) {
+    console.warn('profiles fetch failed:', e && e.message);
+    return null;
+  }
+}
+
 function supabaseLoginHint(err) {
   const m = String((err && err.message) ? err.message : '').toLowerCase();
   const status = err && err.status;
@@ -369,13 +392,7 @@ async function doLogin() {
         password: pass
       });
       if (!error && data && data.user) {
-        const { data: prof, error: pErr } = await window.supabaseClient
-          .from('profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .maybeSingle();
-        if (pErr) console.warn('profiles:', pErr);
-        const p = prof || {};
+        const p = (await fetchOwnProfileById(data.user.id)) || {};
         const role = normalizeProfileRole(p.role);
         currentUser = {
           id: data.user.id,
@@ -407,13 +424,7 @@ async function doLogin() {
         password: pass
       });
       if (!retry.error && retry.data && retry.data.user) {
-        const { data: prof, error: pErr } = await window.supabaseClient
-          .from('profiles')
-          .select('*')
-          .eq('id', retry.data.user.id)
-          .maybeSingle();
-        if (pErr) console.warn('profiles:', pErr);
-        const p = prof || {};
+        const p = (await fetchOwnProfileById(retry.data.user.id)) || {};
         const role = normalizeProfileRole(p.role);
         currentUser = {
           id: retry.data.user.id,
