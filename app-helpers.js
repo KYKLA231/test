@@ -20,10 +20,24 @@ function formatPriceShort(n) {
 }
 
 function addAudit(action, type='info') {
-  DB.audit.push({
-    id: Date.now(), time: new Date().toLocaleString('ru'),
-    user: currentUser?.login||'system', action, type
-  });
+  try {
+    DB.audit.push({
+      id: Date.now(), time: new Date().toLocaleString('ru'),
+      user: currentUser?.login||'system', action, type
+    });
+  } catch (e) {}
+  try {
+    if (typeof getAdminToken !== 'function' || typeof skladApiBase !== 'function') return;
+    if (!skladApiBase()) return;
+    getAdminToken().then((token) => {
+      if (!token) return;
+      fetch(skladApiBase() + '/api/admin/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ type, action, meta: {} })
+      }).catch(() => {});
+    }).catch(() => {});
+  } catch (e) {}
 }
 
 function showToast(msg, type='info') {

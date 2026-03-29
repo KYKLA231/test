@@ -598,6 +598,83 @@ app.post('/api/admin/seed-staff', requireSupabaseAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/admin/supplies', requireSupabaseAdmin, async (_req, res) => {
+  const q = 'supplies?select=id,type,product_id,qty,supplier_id,user_id,note,created_at&order=created_at.desc&limit=500';
+  const r = await supabaseTableRequest(q, 'GET');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, items: Array.isArray(r.data) ? r.data : [] });
+});
+
+app.post('/api/admin/supplies', requireSupabaseAdmin, async (req, res) => {
+  const b = req.body || {};
+  const type = String(b.type || '').trim();
+  const productId = Number(b.product_id || 0);
+  const qty = Number(b.qty || 0);
+  const supplierId = b.supplier_id ? Number(b.supplier_id) : null;
+  const note = String(b.note || '').trim() || null;
+  if (!['in', 'out', 'inv'].includes(type)) return res.status(400).json({ ok: false, error: 'Некорректный тип операции.' });
+  if (!Number.isFinite(productId) || productId <= 0) return res.status(400).json({ ok: false, error: 'Укажите товар.' });
+  if (!Number.isFinite(qty) || qty <= 0) return res.status(400).json({ ok: false, error: 'Укажите количество.' });
+
+  const pRes = await supabaseTableRequest(`products?select=id,qty&limit=1&id=eq.${productId}`, 'GET');
+  if (!pRes.ok) return res.status(pRes.status || 500).json({ ok: false, error: pRes.error });
+  const pRow = Array.isArray(pRes.data) ? pRes.data[0] : null;
+  if (!pRow) return res.status(404).json({ ok: false, error: 'Товар не найден.' });
+  const currentQty = Number(pRow.qty || 0);
+  let newQty = currentQty;
+  if (type === 'in') newQty = currentQty + qty;
+  if (type === 'out') {
+    if (currentQty < qty) return res.status(400).json({ ok: false, error: `Недостаточно товара. Доступно: ${currentQty}` });
+    newQty = currentQty - qty;
+  }
+  if (type === 'inv') newQty = qty;
+
+  const upd = await supabaseTableRequest(`products?id=eq.${productId}`, 'PATCH', { qty: newQty });
+  if (!upd.ok) return res.status(upd.status || 500).json({ ok: false, error: upd.error });
+
+  const ins = await supabaseTableRequest('supplies', 'POST', {
+    type,
+    product_id: productId,
+    qty,
+    supplier_id: supplierId,
+    user_id: req._sbUser && req._sbUser.id ? req._sbUser.id : null,
+    note,
+  });
+  if (!ins.ok) return res.status(ins.status || 500).json({ ok: false, error: ins.error });
+
+  await supabaseTableRequest('audit_log', 'POST', {
+    type: 'supply',
+    action: `${type === 'in' ? 'Приход' : type === 'out' ? 'Списание' : 'Инвентаризация'}: product_id=${productId} qty=${qty}`,
+    user_id: req._sbUser && req._sbUser.id ? req._sbUser.id : null,
+    meta: { type, product_id: productId, qty, supplier_id: supplierId, new_qty: newQty }
+  });
+
+  return res.status(201).json({ ok: true, new_qty: newQty });
+});
+
+app.get('/api/admin/audit', requireSupabaseAdmin, async (_req, res) => {
+  const q = 'audit_log?select=id,type,action,user_id,meta,created_at&order=created_at.desc&limit=500';
+  const r = await supabaseTableRequest(q, 'GET');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, items: Array.isArray(r.data) ? r.data : [] });
+});
+
+app.post('/api/admin/audit', requireSupabaseAdmin, async (req, res) => {
+  const b = req.body || {};
+  const type = String(b.type || 'info').trim();
+  const action = String(b.action || '').trim();
+  const meta = (b.meta && typeof b.meta === 'object') ? b.meta : {};
+  if (!action) return res.status(400).json({ ok: false, error: 'Пустое действие.' });
+  const ins = await supabaseTableRequest('audit_log', 'POST', {
+    type,
+    action,
+    user_id: req._sbUser && req._sbUser.id ? req._sbUser.id : null,
+    meta
+  });
+  if (!ins.ok) return res.status(ins.status || 500).json({ ok: false, error: ins.error });
+  return res.status(201).json({ ok: true });
+});
+
 app.post('/api/login', async (req, res) => {
   const body = req.body || {};
   const login = String(body.login || body.username || '').trim();

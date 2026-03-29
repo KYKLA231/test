@@ -17,7 +17,7 @@ function openSupplyModal(type) {
     supSel.innerHTML = `<option value="">Не указан</option>`+DB.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   };
   if (typeof canUseServerProducts === 'function' && canUseServerProducts()) {
-    Promise.all([loadProductsFromServer(false), loadSuppliersFromServer(false)]).finally(fill);
+    Promise.all([loadProductsFromServer(false), loadSuppliersFromServer(false), loadSuppliesFromServer(false)]).finally(fill);
   } else {
     fill();
   }
@@ -35,6 +35,39 @@ function saveSupply() {
   const supplierId = document.getElementById('supply-supplier').value||null;
   const note = document.getElementById('supply-note').value.trim();
   if(!productId||qty<=0) { showToast('Укажите товар и количество','error'); return; }
+  if (typeof canUseServerProducts === 'function' && canUseServerProducts() && typeof getAdminToken === 'function') {
+    (async () => {
+      try {
+        const token = await getAdminToken();
+        const resp = await fetch(skladApiBase() + '/api/admin/supplies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({
+            type,
+            product_id: productId,
+            qty,
+            supplier_id: supplierId ? +supplierId : null,
+            note
+          })
+        });
+        const j = await resp.json().catch(() => null);
+        if (!resp.ok || !j || !j.ok) {
+          showToast((j && j.error) ? j.error : 'Ошибка операции', 'error');
+          return;
+        }
+        closeModal('modal-supply');
+        document.getElementById('supply-note').value='';
+        if (typeof __productsServerSync !== 'undefined') __productsServerSync.loaded = false;
+        if (typeof __suppliesServerSync !== 'undefined') __suppliesServerSync.loaded = false;
+        await Promise.all([loadProductsFromServer(true), loadSuppliesFromServer(true)]);
+        renderSupplies();
+        showToast('Операция проведена', 'success');
+      } catch (e) {
+        showToast('Ошибка операции', 'error');
+      }
+    })();
+    return;
+  }
   const prod = DB.products.find(p=>p.id===productId);
   if(!prod) return;
   if(type==='out' && prod.qty<qty) { showToast(`Недостаточно товара. Доступно: ${prod.qty}`, 'error'); return; }
@@ -72,7 +105,7 @@ function renderSupplies() {
     </div>`).join('');
   };
   if (typeof canUseServerProducts === 'function' && canUseServerProducts()) {
-    Promise.all([loadProductsFromServer(false), loadSuppliersFromServer(false)]).finally(draw);
+    Promise.all([loadProductsFromServer(false), loadSuppliersFromServer(false), loadSuppliesFromServer(false)]).finally(draw);
     return;
   }
   draw();

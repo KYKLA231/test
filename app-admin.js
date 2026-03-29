@@ -1,13 +1,20 @@
 function renderAudit() {
   const log = document.getElementById('audit-log');
   const typeColors = {create:'var(--accent-green)',update:'var(--accent)',delete:'var(--accent-red)',auth:'var(--accent-3)',supply:'var(--accent-2)',order:'var(--accent-purple)',settings:'var(--text-1)'};
-  log.innerHTML = [...DB.audit].reverse().map(e=>`
+  const draw = function () {
+    log.innerHTML = [...DB.audit].reverse().map(e=>`
     <div class="log-entry">
       <span class="log-time">${e.time}</span>
       <span class="log-user">${e.user}</span>
       <span class="log-action">${e.action}</span>
       <span class="log-type" style="color:${typeColors[e.type]||'#fff'};font-family:var(--font-mono);font-size:10px;min-width:80px">${e.type?.toUpperCase()}</span>
     </div>`).join('');
+  };
+  if (typeof loadAuditFromServer === 'function' && typeof canUseServerProducts === 'function' && canUseServerProducts()) {
+    Promise.all([loadAuditFromServer(false)]).finally(draw);
+    return;
+  }
+  draw();
 }
 function renderUsers() {
   const grid = document.getElementById('users-grid');

@@ -21,6 +21,8 @@ let __productsServerSync = { loaded: false, loading: false };
 let __categoriesServerSync = { loaded: false, loading: false };
 let __suppliersServerSync = { loaded: false, loading: false };
 let __ordersServerSync = { loaded: false, loading: false };
+let __suppliesServerSync = { loaded: false, loading: false };
+let __auditServerSync = { loaded: false, loading: false };
 
 function rememberLogin(login, password) {
   try {
@@ -247,6 +249,71 @@ async function loadOrdersFromServer(force) {
     return false;
   } finally {
     __ordersServerSync.loading = false;
+  }
+}
+
+async function getAdminToken() {
+  try {
+    if (!window.supabaseClient || !window.supabaseClient.auth) return '';
+    const s = await window.supabaseClient.auth.getSession();
+    return (s && s.data && s.data.session && s.data.session.access_token) ? s.data.session.access_token : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+async function loadSuppliesFromServer(force) {
+  if (!canUseServerProducts()) return false;
+  if (__suppliesServerSync.loading) return false;
+  if (__suppliesServerSync.loaded && !force) return true;
+  __suppliesServerSync.loading = true;
+  try {
+    const token = await getAdminToken();
+    const resp = await fetch(skladApiBase() + '/api/admin/supplies', { headers: { Authorization: 'Bearer ' + token } });
+    const j = await resp.json().catch(() => null);
+    if (!resp.ok || !j || !j.ok) return false;
+    DB.supplies = (j.items || []).map((r) => ({
+      id: Number(r.id),
+      type: r.type,
+      productId: Number(r.product_id),
+      qty: Number(r.qty || 0),
+      supplierId: r.supplier_id != null ? Number(r.supplier_id) : null,
+      userId: r.user_id || null,
+      note: r.note || '',
+      date: r.created_at ? new Date(r.created_at).toLocaleString('ru') : '',
+    }));
+    __suppliesServerSync.loaded = true;
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    __suppliesServerSync.loading = false;
+  }
+}
+
+async function loadAuditFromServer(force) {
+  if (!canUseServerProducts()) return false;
+  if (__auditServerSync.loading) return false;
+  if (__auditServerSync.loaded && !force) return true;
+  __auditServerSync.loading = true;
+  try {
+    const token = await getAdminToken();
+    const resp = await fetch(skladApiBase() + '/api/admin/audit', { headers: { Authorization: 'Bearer ' + token } });
+    const j = await resp.json().catch(() => null);
+    if (!resp.ok || !j || !j.ok) return false;
+    DB.audit = (j.items || []).map((r) => ({
+      id: Number(r.id),
+      time: r.created_at ? new Date(r.created_at).toLocaleString('ru') : '',
+      user: r.user_id || 'system',
+      action: r.action,
+      type: r.type || 'info'
+    }));
+    __auditServerSync.loaded = true;
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    __auditServerSync.loading = false;
   }
 }
 
