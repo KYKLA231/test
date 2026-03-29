@@ -95,6 +95,22 @@ function loadDB() {
   return false;
 }
 
+/** База URL для /api/* на проде (Netlify = только статика). Совпадает с index.html apiBase(). */
+function skladApiBase() {
+  if (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:') {
+    return 'http://localhost:3000';
+  }
+  if (typeof window.SKLAD_API_BASE === 'string' && window.SKLAD_API_BASE.trim()) {
+    return window.SKLAD_API_BASE.trim().replace(/\/$/, '');
+  }
+  var m = typeof document !== 'undefined' && document.querySelector && document.querySelector('meta[name="sklad-api-base"]');
+  if (m) {
+    var c = (m.getAttribute('content') || '').trim();
+    if (c) return c.replace(/\/$/, '');
+  }
+  return '';
+}
+
 function initialsFromName(name) {
   const s = (name || '').trim();
   if(!s) return '?';
@@ -206,7 +222,7 @@ async function doLogin() {
   let serverPayload = null;
   let serverStatus = null;
   try {
-    const resp = await fetch('/api/login', {
+    const resp = await fetch(skladApiBase() + '/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ login, password: pass })

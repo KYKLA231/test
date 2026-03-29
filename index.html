@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- После деплоя API укажи URL: content="https://твой-сервис.onrender.com" -->
+  <meta name="sklad-api-base" content="">
   <title>Склад Pro — для клиентов</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -106,7 +108,7 @@
                 <label for="password">Пароль * (не менее 8 символов)</label>
                 <input id="password" name="password" type="password" required autocomplete="new-password" minlength="8" placeholder="••••••••">
               </div>
-              <button type="submit" class="client-btn client-btn-primary" style="width:100%;margin-top:8px">Создать аккаунт</button>
+              <button type="submit" id="reg-submit-btn" class="client-btn client-btn-primary" style="width:100%;margin-top:8px" disabled aria-disabled="true">Создать аккаунт</button>
             </form>
             <div id="reg-msg" class="client-msg" role="status"></div>
           </div>
@@ -147,6 +149,15 @@
         if (typeof supabase !== 'undefined' && supabase && typeof supabase.createClient === 'function') {
           window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
           console.log('Supabase client initialized');
+          if (window.location.protocol !== 'file:') {
+            try {
+              var _regBtn = document.getElementById('reg-submit-btn');
+              if (_regBtn) {
+                _regBtn.disabled = false;
+                _regBtn.removeAttribute('aria-disabled');
+              }
+            } catch (eBtn) { /* ignore */ }
+          }
         } else {
           window.supabaseClient = null;
         }
@@ -202,7 +213,83 @@
 
       function apiBase() {
         if (window.location.protocol === 'file:') return 'http://localhost:3000';
+        if (typeof window.SKLAD_API_BASE === 'string' && window.SKLAD_API_BASE.trim()) {
+          return window.SKLAD_API_BASE.trim().replace(/\/$/, '');
+        }
+        var m = document.querySelector('meta[name="sklad-api-base"]');
+        if (m) {
+          var c = (m.getAttribute('content') || '').trim();
+          if (c) return c.replace(/\/$/, '');
+        }
         return '';
+      }
+
+      async function readApiJson(resp) {
+        var txt = await resp.text();
+        try {
+          return { ok: resp.ok, status: resp.status, json: JSON.parse(txt), parseError: false };
+        } catch (e) {
+          return { ok: resp.ok, status: resp.status, json: null, parseError: true, raw: txt };
+        }
+      }
+
+      function withTimeout(promise, ms, errMsg) {
+        return new Promise(function (resolve, reject) {
+          var finished = false;
+          var t = setTimeout(function () {
+            if (!finished) {
+              finished = true;
+              reject(new Error(errMsg));
+            }
+          }, ms);
+          Promise.resolve(promise).then(
+            function (v) {
+              if (!finished) {
+                finished = true;
+                clearTimeout(t);
+                resolve(v);
+              }
+            },
+            function (e) {
+              if (!finished) {
+                finished = true;
+                clearTimeout(t);
+                reject(e);
+              }
+            }
+          );
+        });
+      }
+
+      /** Несколько попыток: на телефоне запрос к Render/Railway часто рвётся при переключении сети. */
+      async function postRegisterWithRetry(body) {
+        var url = apiBase() + '/api/register';
+        var lastErr = null;
+        var attempts = 3;
+        for (var i = 0; i < attempts; i++) {
+          try {
+            var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            var tid = ctrl ? setTimeout(function () { try { ctrl.abort(); } catch (x) {} }, 50000) : null;
+            var resp = await fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+              signal: ctrl ? ctrl.signal : undefined
+            });
+            if (tid) clearTimeout(tid);
+            var parsed = await readApiJson(resp);
+            if (!parsed.parseError && parsed.json) {
+              return { resp: resp, json: parsed.json };
+            }
+            lastErr = new Error('not_json');
+          } catch (err) {
+            lastErr = err;
+          }
+          if (i < attempts - 1) {
+            await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); });
+          }
+        }
+        throw lastErr || new Error('register_failed');
       }
 
       async function universalSignUp(email, password) {
@@ -297,20 +384,36 @@
           return;
         }
 
-        // Вставляем предложенный блок проверки/логирования
-        const { data, error } = await signupClient.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: name || null,
-              company: company || null,
-              phone: phone || null,
-              username: username || null,
-              role: 'admin'
-            }
-          }
-        });
+        var data, error;
+        try {
+          var signUpPayload = await withTimeout(
+            signupClient.auth.signUp({
+              email,
+              password,
+              options: {
+                data: {
+                  full_name: name || null,
+                  company: company || null,
+                  phone: phone || null,
+                  username: username || null,
+                  role: 'admin'
+                }
+              }
+            }),
+            75000,
+            'Долгий ответ от Supabase (часто при слабом интернете). Попробуйте Wi‑Fi или подождите и отправьте форму ещё раз.'
+          );
+          data = signUpPayload.data;
+          error = signUpPayload.error;
+        } catch (toErr) {
+          msg.className = 'client-msg error';
+          msg.textContent = (toErr && toErr.message) ? toErr.message : 'Ошибка сети при обращении к Supabase.';
+          msg.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = originalLabel;
+          isLoading = false;
+          return;
+        }
 
         console.log("DATA:", data);
         console.log("ERROR:", error);
@@ -332,12 +435,15 @@
               try {
               const fallbackBody = { email: email, password: password, full_name: name, company: company, phone: phone, username: username };
               console.log('Fallback request body:', JSON.stringify(fallbackBody));
-              const resp = await fetch(apiBase() + '/api/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(fallbackBody)
-              });
-              const j = await resp.json().catch(()=>({ ok: false, error: 'Invalid JSON response' }));
+              var fbWrap;
+              try {
+                fbWrap = await postRegisterWithRetry(fallbackBody);
+              } catch (fbNet) {
+                showRegErr('Не удалось связаться с сервером регистрации после нескольких попыток. Проверьте интернет, URL в meta sklad-api-base и что сервис на Render/Railway не «уснул».');
+                return;
+              }
+              var resp = fbWrap.resp;
+              var j = fbWrap.json;
               console.log('Fallback response:', j);
               if (resp.ok && j.ok) {
                 msg.className = 'client-msg ok';
@@ -412,53 +518,65 @@
         // Профиль в public.profiles создаётся триггером handle_new_user (см. SUPABASE_PROFILES.sql);
         // метаданные уходят в raw_user_meta_data через options.data выше — вставка из браузера не нужна и ломалась из‑за RLS без сессии.
 
-        msg.className = 'client-msg ok';
-        msg.textContent = data.session
+        var baseOkMsg = data.session
           ? 'Регистрация успешна. Сейчас перенаправим вас на страницу входа.'
           : 'Аккаунт создан. Если в проекте включено подтверждение email — откройте письмо; затем войдите.';
-        msg.style.display = 'block';
 
         try { form.reset(); } catch (e) { }
         var firstInput = form.querySelector('input');
         if (firstInput) firstInput.focus();
 
         var localLogin = (username || '').trim();
+        var serverSyncExtra = '';
         try {
-          const regResp = await fetch(apiBase() + '/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, password: password, full_name: name, company: company, phone: phone, username: username })
-          });
-          const regJson = await regResp.json().catch(function () { return null; });
+          var regWrap = await postRegisterWithRetry({ email: email, password: password, full_name: name, company: company, phone: phone, username: username });
+          var regResp = regWrap.resp;
+          var regJson = regWrap.json;
           if (regJson && regJson.username) {
             localLogin = String(regJson.username).trim();
           }
           if (!regResp.ok || !regJson || !regJson.ok) {
             msg.className = 'client-msg error';
-            msg.textContent = ((regJson && regJson.error) ? regJson.error : 'Не удалось сохранить учётную запись на локальном сервере.')
-              + ' В Supabase аккаунт мог быть создан — проверьте почту или войдите, если уже подтверждали email.';
+            msg.textContent = ((regJson && regJson.error) ? regJson.error : 'Не удалось сохранить учётную запись на сервере приложения.')
+              + ' В Supabase пользователь мог быть создан — откройте Authentication → Users.';
             msg.style.display = 'block';
             btn.disabled = false;
             btn.textContent = originalLabel;
             isLoading = false;
             return;
           }
-        } catch (regErr) { /* сервер может быть выключен */ }
+        } catch (regErr) {
+          console.warn('post-register after Supabase', regErr);
+          serverSyncExtra = ' Дублирование на сервер приложения не подтверждено (обрыв сети или таймаут на телефоне). Откройте Supabase → Authentication → Users: запись должна быть там; public.profiles заполняется триггером. Если Users пуст — проверьте логи Postgres и SUPABASE_PROFILES.sql.';
+        }
+
+        msg.className = 'client-msg ok';
+        msg.textContent = baseOkMsg + serverSyncExtra;
+        msg.style.display = 'block';
 
         try {
-          const loginResp = await fetch(apiBase() + '/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ login: localLogin, password: password })
-          });
-          if (loginResp.ok) {
+          var loginResp = null;
+          for (var li = 0; li < 2; li++) {
+            try {
+              loginResp = await fetch(apiBase() + '/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ login: localLogin, password: password })
+              });
+              if (loginResp && loginResp.ok) break;
+            } catch (loginNet) {
+              loginResp = null;
+              if (li === 0) await new Promise(function (r) { setTimeout(r, 600); });
+            }
+          }
+          if (loginResp && loginResp.ok) {
             try {
               sessionStorage.setItem('skladpro_autologin', JSON.stringify({ login: localLogin, password: password }));
             } catch (sErr) {}
             window.location.replace('admin.html');
           } else {
             try { sessionStorage.setItem('skladpro_prefill_login', localLogin); } catch (sErr) {}
-            msg.textContent = 'Аккаунт создан. Откройте панель и войдите с логином «' + localLogin + '» (запустите локальный сервер на порту 3000, если вход не удался).';
+            msg.textContent = 'Аккаунт создан. Откройте панель и войдите с логином «' + localLogin + '». Если с телефона вход не с первого раза — проверьте интернет и meta sklad-api-base.';
             setTimeout(function () { window.location.href = 'admin.html'; }, 900);
           }
         } catch (e) {
