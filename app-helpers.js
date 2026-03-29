@@ -30,10 +30,11 @@ function addAudit(action, type='info') {
     if (typeof getAdminToken !== 'function' || typeof skladApiBase !== 'function') return;
     if (!skladApiBase()) return;
     getAdminToken().then((token) => {
-      if (!token) return;
+      var headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = 'Bearer ' + token;
       fetch(skladApiBase() + '/api/admin/audit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        headers: headers,
         body: JSON.stringify({ type, action, meta: {} })
       }).catch(() => {});
     }).catch(() => {});

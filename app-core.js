@@ -298,7 +298,8 @@ async function loadAuditFromServer(force) {
   __auditServerSync.loading = true;
   try {
     const token = await getAdminToken();
-    const resp = await fetch(skladApiBase() + '/api/admin/audit', { headers: { Authorization: 'Bearer ' + token } });
+    const headers = token ? { Authorization: 'Bearer ' + token } : {};
+    const resp = await fetch(skladApiBase() + '/api/admin/audit', { headers });
     const j = await resp.json().catch(() => null);
     if (!resp.ok || !j || !j.ok) return false;
     DB.audit = (j.items || []).map((r) => ({

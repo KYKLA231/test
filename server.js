@@ -652,23 +652,37 @@ app.post('/api/admin/supplies', requireSupabaseAdmin, async (req, res) => {
   return res.status(201).json({ ok: true, new_qty: newQty });
 });
 
-app.get('/api/admin/audit', requireSupabaseAdmin, async (_req, res) => {
+app.get('/api/admin/audit', async (_req, res) => {
   const q = 'audit_log?select=id,type,action,user_id,meta,created_at&order=created_at.desc&limit=500';
   const r = await supabaseTableRequest(q, 'GET');
   if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
   return res.json({ ok: true, items: Array.isArray(r.data) ? r.data : [] });
 });
 
-app.post('/api/admin/audit', requireSupabaseAdmin, async (req, res) => {
+app.post('/api/admin/audit', async (req, res) => {
   const b = req.body || {};
   const type = String(b.type || 'info').trim();
   const action = String(b.action || '').trim();
   const meta = (b.meta && typeof b.meta === 'object') ? b.meta : {};
   if (!action) return res.status(400).json({ ok: false, error: 'Пустое действие.' });
+  let userId = null;
+  try {
+    const auth = String(req.headers.authorization || '');
+    const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+    const cfg = supabaseAdminConfig();
+    if (token && cfg.enabled) {
+      const uResp = await fetch(`${cfg.baseUrl}/auth/v1/user`, {
+        method: 'GET',
+        headers: { apikey: cfg.secret, Authorization: `Bearer ${token}` }
+      });
+      const u = await uResp.json().catch(() => null);
+      if (uResp.ok && u && u.id) userId = u.id;
+    }
+  } catch (e) {}
   const ins = await supabaseTableRequest('audit_log', 'POST', {
     type,
     action,
-    user_id: req._sbUser && req._sbUser.id ? req._sbUser.id : null,
+    user_id: userId,
     meta
   });
   if (!ins.ok) return res.status(ins.status || 500).json({ ok: false, error: ins.error });
