@@ -149,6 +149,33 @@ async function supabaseTableRequest(pathAndQuery, method = 'GET', payload = null
   }
 }
 
+async function requireSupabaseAdmin(req, res, next) {
+  const cfg = supabaseAdminConfig();
+  if (!cfg.enabled) return res.status(500).json({ ok: false, error: 'Supabase Admin не настроен на сервере.' });
+
+  const auth = String(req.headers.authorization || '');
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return res.status(401).json({ ok: false, error: 'Требуется Supabase сессия (Bearer token).' });
+
+  try {
+    const uResp = await fetch(`${cfg.baseUrl}/auth/v1/user`, {
+      method: 'GET',
+      headers: { apikey: cfg.secret, Authorization: `Bearer ${token}` }
+    });
+    const u = await uResp.json().catch(() => null);
+    if (!uResp.ok || !u || !u.id) return res.status(401).json({ ok: false, error: 'Неверная Supabase сессия.' });
+
+    const p = await supabaseTableRequest(`profiles?select=role&id=eq.${u.id}`, 'GET');
+    const role = (p.ok && Array.isArray(p.data) && p.data[0] && p.data[0].role) ? String(p.data[0].role).toLowerCase() : '';
+    if (role !== 'admin') return res.status(403).json({ ok: false, error: 'Только администратор.' });
+
+    req._sbUser = u;
+    next();
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+}
+
 app.post('/api/register', async (req, res) => {
   const body = req.body || {};
   console.log('[/api/register] payload received:', body);
@@ -417,6 +444,97 @@ app.patch('/api/orders/:id', async (req, res) => {
   const r = await supabaseTableRequest(`orders?id=eq.${id}`, 'PATCH', payload);
   if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
   return res.json({ ok: true, item: Array.isArray(r.data) ? r.data[0] : r.data });
+});
+
+app.get('/api/admin/staff', requireSupabaseAdmin, async (_req, res) => {
+  const q = 'staff?select=user_id,role,active,created_at,profiles(email,full_name,username,phone,company)&order=created_at.desc';
+  const r = await supabaseTableRequest(q, 'GET');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  const items = (Array.isArray(r.data) ? r.data : []).map(row => {
+    const p = row.profiles || {};
+    return {
+      id: row.user_id,
+      role: row.role,
+      active: row.active,
+      created_at: row.created_at,
+      email: p.email,
+      full_name: p.full_name,
+      username: p.username,
+      phone: p.phone,
+      company: p.company,
+    };
+  });
+  return res.json({ ok: true, items });
+});
+
+app.post('/api/admin/staff', requireSupabaseAdmin, async (req, res) => {
+  const cfg = supabaseAdminConfig();
+  const b = req.body || {};
+  const email = String(b.email || '').trim().toLowerCase();
+  const password = String(b.password || '');
+  const fullName = String(b.full_name || '').trim();
+  const username = String(b.username || '').trim() || null;
+  const phone = String(b.phone || '').trim() || null;
+  const company = String(b.company || '').trim() || null;
+  const roleRaw = String(b.role || 'worker').trim().toLowerCase();
+  const role = (roleRaw === 'admin' || roleRaw === 'manager' || roleRaw === 'worker') ? roleRaw : 'worker';
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ ok: false, error: 'Укажите корректный email.' });
+  if (password.length < 8) return res.status(400).json({ ok: false, error: 'Пароль не короче 8 символов.' });
+  if (fullName.length < 2) return res.status(400).json({ ok: false, error: 'Укажите имя.' });
+
+  try {
+    const resp = await fetch(`${cfg.baseUrl}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: cfg.secret, Authorization: `Bearer ${cfg.secret}` },
+      body: JSON.stringify({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName, phone, company, username, role }
+      })
+    });
+    const body = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = [body.msg, body.message, body.error_description, body.error].filter(Boolean).join(' ') || String(resp.status);
+      return res.status(resp.status).json({ ok: false, error: msg });
+    }
+    const userId = body && body.id ? String(body.id) : null;
+    if (!userId) return res.status(500).json({ ok: false, error: 'Не удалось получить id пользователя.' });
+    const ins = await supabaseTableRequest('staff', 'POST', {
+      user_id: userId,
+      role,
+      active: true,
+      created_by: req._sbUser && req._sbUser.id ? req._sbUser.id : null,
+    });
+    if (!ins.ok) return res.status(ins.status || 500).json({ ok: false, error: ins.error });
+    return res.status(201).json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/admin/staff/:id/password', requireSupabaseAdmin, async (req, res) => {
+  const cfg = supabaseAdminConfig();
+  const userId = String(req.params.id || '').trim();
+  const b = req.body || {};
+  const password = String(b.password || '');
+  if (password.length < 8) return res.status(400).json({ ok: false, error: 'Пароль не короче 8 символов.' });
+  try {
+    const resp = await fetch(`${cfg.baseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', apikey: cfg.secret, Authorization: `Bearer ${cfg.secret}` },
+      body: JSON.stringify({ password })
+    });
+    const body = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const msg = [body.msg, body.message, body.error_description, body.error].filter(Boolean).join(' ') || String(resp.status);
+      return res.status(resp.status).json({ ok: false, error: msg });
+    }
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 app.post('/api/login', async (req, res) => {
