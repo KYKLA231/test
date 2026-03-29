@@ -137,6 +137,28 @@ function resetUserPassword(id) {
   })();
 }
 
+function seedStaff() {
+  (async () => {
+    try {
+      if (!window.supabaseClient) { showToast('Supabase не готов', 'error'); return; }
+      const s = await window.supabaseClient.auth.getSession();
+      const token = s && s.data && s.data.session ? s.data.session.access_token : '';
+      if (!token) { showToast('Нужно войти через Supabase (email+пароль).', 'warning'); return; }
+      const resp = await fetch(skladApiBase() + '/api/admin/seed-staff', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const j = await resp.json().catch(() => null);
+      if (!resp.ok || !j || !j.ok) { showToast((j && j.error) ? j.error : 'Ошибка', 'error'); return; }
+      console.log('Seed staff created:', j.created);
+      showToast('Тестовые сотрудники созданы. Смотри Console.', 'success');
+      renderUsers();
+    } catch (e) {
+      showToast('Ошибка', 'error');
+    }
+  })();
+}
+
 function renderNotifications() {
   const list = document.getElementById('notif-list');
   const unread = DB.notifications.filter(n=>!n.read).length;

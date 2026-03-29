@@ -440,7 +440,10 @@
             <div class="section-title">Пользователи <span>системы</span></div>
             <div class="page-sub">Управление доступом и ролями</div>
           </div>
-          <button class="btn btn-primary" onclick="openModal('modal-add-user')">Добавить пользователя</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" onclick="seedStaff()">Создать тестовых</button>
+            <button class="btn btn-primary" onclick="openModal('modal-add-user')">Добавить пользователя</button>
+          </div>
         </div>
         <div class="three-col" id="users-grid"></div>
       </div>

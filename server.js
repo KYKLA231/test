@@ -447,16 +447,25 @@ app.patch('/api/orders/:id', async (req, res) => {
 });
 
 app.get('/api/admin/staff', requireSupabaseAdmin, async (_req, res) => {
-  const q = 'staff?select=user_id,role,active,created_at,profiles(email,full_name,username,phone,company)&order=created_at.desc';
-  const r = await supabaseTableRequest(q, 'GET');
-  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
-  const items = (Array.isArray(r.data) ? r.data : []).map(row => {
-    const p = row.profiles || {};
+  const staffRes = await supabaseTableRequest('staff?select=user_id,role,active,created_at&order=created_at.desc', 'GET');
+  if (!staffRes.ok) return res.status(staffRes.status || 500).json({ ok: false, error: staffRes.error });
+  const staffRows = Array.isArray(staffRes.data) ? staffRes.data : [];
+  const ids = staffRows.map(r => String(r.user_id || '').trim()).filter(Boolean);
+  if (ids.length === 0) return res.json({ ok: true, items: [] });
+
+  const inList = ids.map(id => `"${id.replace(/"/g, '')}"`).join(',');
+  const profRes = await supabaseTableRequest(`profiles?select=id,email,full_name,username,phone,company,role,created_at&id=in.(${inList})`, 'GET');
+  if (!profRes.ok) return res.status(profRes.status || 500).json({ ok: false, error: profRes.error });
+  const profRows = Array.isArray(profRes.data) ? profRes.data : [];
+  const byId = new Map(profRows.map(p => [String(p.id), p]));
+
+  const items = staffRows.map(s => {
+    const p = byId.get(String(s.user_id)) || {};
     return {
-      id: row.user_id,
-      role: row.role,
-      active: row.active,
-      created_at: row.created_at,
+      id: s.user_id,
+      role: s.role || p.role,
+      active: s.active,
+      created_at: s.created_at,
       email: p.email,
       full_name: p.full_name,
       username: p.username,
@@ -532,6 +541,58 @@ app.post('/api/admin/staff/:id/password', requireSupabaseAdmin, async (req, res)
       return res.status(resp.status).json({ ok: false, error: msg });
     }
     return res.json({ ok: true });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/admin/seed-staff', requireSupabaseAdmin, async (req, res) => {
+  const cfg = supabaseAdminConfig();
+  const now = Date.now();
+  const baseDomain = 'example.com';
+  const password = 'Test12345!';
+
+  const seeds = [
+    { role: 'manager', username: `manager${String(now).slice(-6)}`, full_name: 'Тестовый Менеджер' },
+    { role: 'worker', username: `worker${String(now).slice(-6)}`, full_name: 'Тестовый Работник' },
+  ].map((u) => ({
+    ...u,
+    email: `${u.username}@${baseDomain}`.toLowerCase(),
+    phone: '',
+    company: 'Склад Pro',
+    password,
+  }));
+
+  try {
+    const created = [];
+    for (const u of seeds) {
+      const resp = await fetch(`${cfg.baseUrl}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: cfg.secret, Authorization: `Bearer ${cfg.secret}` },
+        body: JSON.stringify({
+          email: u.email,
+          password: u.password,
+          email_confirm: true,
+          user_metadata: { full_name: u.full_name, phone: u.phone, company: u.company, username: u.username, role: u.role }
+        })
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const msg = [body.msg, body.message, body.error_description, body.error].filter(Boolean).join(' ') || String(resp.status);
+        return res.status(resp.status).json({ ok: false, error: msg });
+      }
+      const userId = body && body.id ? String(body.id) : null;
+      if (!userId) return res.status(500).json({ ok: false, error: 'Не удалось получить id пользователя.' });
+      const ins = await supabaseTableRequest('staff', 'POST', {
+        user_id: userId,
+        role: u.role,
+        active: true,
+        created_by: req._sbUser && req._sbUser.id ? req._sbUser.id : null,
+      });
+      if (!ins.ok) return res.status(ins.status || 500).json({ ok: false, error: ins.error });
+      created.push({ email: u.email, username: u.username, role: u.role, password: u.password });
+    }
+    return res.json({ ok: true, created });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
