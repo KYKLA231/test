@@ -10,10 +10,17 @@ function openSupplyModal(type) {
   const btn = document.getElementById('supply-btn');
   btn.className = `btn ${btnColors[type]}`;
   
-  const sel = document.getElementById('supply-product');
-  sel.innerHTML = DB.products.map(p=>`<option value="${p.id}">${p.name} (${p.qty} ${p.unit})</option>`).join('');
-  const supSel = document.getElementById('supply-supplier');
-  supSel.innerHTML = `<option value="">Не указан</option>`+DB.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const fill = function () {
+    const sel = document.getElementById('supply-product');
+    sel.innerHTML = DB.products.map(p=>`<option value="${p.id}">${p.name} (${p.qty} ${p.unit})</option>`).join('');
+    const supSel = document.getElementById('supply-supplier');
+    supSel.innerHTML = `<option value="">Не указан</option>`+DB.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  };
+  if (typeof canUseServerProducts === 'function' && canUseServerProducts()) {
+    Promise.all([loadProductsFromServer(false), loadSuppliersFromServer(false)]).finally(fill);
+  } else {
+    fill();
+  }
   openModal('modal-supply');
 }
 
@@ -45,6 +52,7 @@ function saveSupply() {
 }
 
 function renderSupplies() {
+  const draw = function () {
   updateSupplySelects();
   filterSupplies();
   document.getElementById('sup-total-in').textContent = DB.supplies.filter(s=>s.type==='in').reduce((a,s)=>a+s.qty,0);
@@ -62,6 +70,12 @@ function renderSupplies() {
         <div style="font-size:11px;color:var(--text-2);font-family:var(--font-mono)">${DB.supplies.filter(sp=>sp.supplierId===s.id).length} пост.</div>
       </div>
     </div>`).join('');
+  };
+  if (typeof canUseServerProducts === 'function' && canUseServerProducts()) {
+    Promise.all([loadProductsFromServer(false), loadSuppliersFromServer(false)]).finally(draw);
+    return;
+  }
+  draw();
 }
 
 function filterSupplies() {

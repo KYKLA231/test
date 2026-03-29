@@ -18,6 +18,9 @@ let __productsSync = { loaded: false, loading: false, channel: null };
 let __productsWarnedNoSession = false;
 let __productsNeedsSupabaseLogin = false;
 let __productsServerSync = { loaded: false, loading: false };
+let __categoriesServerSync = { loaded: false, loading: false };
+let __suppliersServerSync = { loaded: false, loading: false };
+let __ordersServerSync = { loaded: false, loading: false };
 
 function rememberLogin(login, password) {
   try {
@@ -31,12 +34,7 @@ function forgetLogin() {
   } catch (e) {}
 }
 
-const USERS_DEFAULT = [
-  { id:1, name:'Алексей Николаев', login:'admin', pass:'admin123', role:'admin', email:'admin@sklad.ru', phone:'+7 999 001-01-01', active:true, avatar:'АН' },
-  { id:2, name:'Мария Петрова', login:'manager', pass:'mgr123', role:'manager', email:'manager@sklad.ru', phone:'+7 999 002-02-02', active:true, avatar:'МП' },
-  { id:3, name:'Дмитрий Козлов', login:'worker', pass:'wrk123', role:'worker', email:'worker@sklad.ru', phone:'+7 999 003-03-03', active:true, avatar:'ДК' },
-  { id:4, name:'Ольга Смирнова', login:'olga', pass:'olga123', role:'manager', email:'olga@sklad.ru', phone:'+7 999 004-04-04', active:true, avatar:'ОС' },
-];
+const USERS_DEFAULT = [];
 
 const CATEGORIES_DEFAULT = [
   { id:1, name:'Электроника', icon:'', color:'var(--accent-3)', count:0 },
@@ -157,12 +155,13 @@ async function loadProductsFromServer(force) {
       id: Number(r.id),
       name: r.name,
       sku: r.sku || '',
-      catId: firstCat,
+      catId: (r.cat_id != null ? Number(r.cat_id) : firstCat),
       qty: Number(r.qty || 0),
       minQty: Number(r.min_qty || 0),
       price: Number(r.price || 0),
       unit: r.unit || 'шт',
       location: r.location || '',
+      supplierId: (r.supplier_id != null ? Number(r.supplier_id) : null),
       desc: r.description || '',
     }));
     __productsServerSync.loaded = true;
@@ -171,6 +170,83 @@ async function loadProductsFromServer(force) {
     return false;
   } finally {
     __productsServerSync.loading = false;
+  }
+}
+
+async function loadCategoriesFromServer(force) {
+  if (!canUseServerProducts()) return false;
+  if (__categoriesServerSync.loading) return false;
+  if (__categoriesServerSync.loaded && !force) return true;
+  __categoriesServerSync.loading = true;
+  try {
+    const resp = await fetch(skladApiBase() + '/api/categories');
+    const j = await resp.json().catch(() => null);
+    if (!resp.ok || !j || !j.ok) return false;
+    DB.categories = (j.items || []).map((r) => ({
+      id: Number(r.id),
+      name: r.name,
+      icon: r.icon || '',
+      color: r.color || 'var(--accent-3)',
+    }));
+    __categoriesServerSync.loaded = true;
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    __categoriesServerSync.loading = false;
+  }
+}
+
+async function loadSuppliersFromServer(force) {
+  if (!canUseServerProducts()) return false;
+  if (__suppliersServerSync.loading) return false;
+  if (__suppliersServerSync.loaded && !force) return true;
+  __suppliersServerSync.loading = true;
+  try {
+    const resp = await fetch(skladApiBase() + '/api/suppliers');
+    const j = await resp.json().catch(() => null);
+    if (!resp.ok || !j || !j.ok) return false;
+    DB.suppliers = (j.items || []).map((r) => ({
+      id: Number(r.id),
+      name: r.name,
+      contact: r.contact || '',
+      phone: r.phone || '',
+    }));
+    __suppliersServerSync.loaded = true;
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    __suppliersServerSync.loading = false;
+  }
+}
+
+async function loadOrdersFromServer(force) {
+  if (!canUseServerProducts()) return false;
+  if (__ordersServerSync.loading) return false;
+  if (__ordersServerSync.loaded && !force) return true;
+  __ordersServerSync.loading = true;
+  try {
+    const resp = await fetch(skladApiBase() + '/api/orders');
+    const j = await resp.json().catch(() => null);
+    if (!resp.ok || !j || !j.ok) return false;
+    DB.orders = (j.items || []).map((r) => ({
+      id: Number(r.id),
+      client: r.client,
+      productId: Number(r.product_id),
+      qty: Number(r.qty || 1),
+      status: r.status || 'new',
+      priority: r.priority || 'normal',
+      address: r.address || '',
+      note: r.note || '',
+      createdAt: r.created_at ? new Date(r.created_at).toLocaleString('ru') : '',
+    }));
+    __ordersServerSync.loaded = true;
+    return true;
+  } catch (e) {
+    return false;
+  } finally {
+    __ordersServerSync.loading = false;
   }
 }
 
@@ -504,6 +580,7 @@ function doLogout() {
 }
 
 function setupUI() {
+  DB.users = currentUser ? [currentUser] : [];
   document.getElementById('sidebar-username').textContent = currentUser.name;
   document.getElementById('sidebar-role').textContent = currentUser.role;
   document.getElementById('sidebar-avatar').textContent = currentUser.avatar || currentUser.name[0];
@@ -766,9 +843,14 @@ function roundRect(ctx,x,y,w,h,r) {
 }
 
 function renderProducts() {
-  updateCategorySelects();
+  if (typeof canUseServerProducts === 'function' && canUseServerProducts()) {
+    Promise.all([loadCategoriesFromServer(false), loadSuppliersFromServer(false)]).finally(updateCategorySelects);
+  } else {
+    updateCategorySelects();
+  }
   if (canUseServerProducts()) {
-    loadProductsFromServer(false).then((ok) => {
+    Promise.all([loadCategoriesFromServer(false), loadSuppliersFromServer(false), loadProductsFromServer(false)]).then((arr) => {
+      const ok = arr[2];
       if (!ok) {
         showToast('Не удалось загрузить товары из сервера', 'warning');
       }
@@ -890,6 +972,7 @@ function editProduct(id) {
   document.getElementById('prod-desc').value = p.desc||'';
   updateCategorySelects();
   document.getElementById('prod-cat').value = p.catId || (DB.categories && DB.categories.length ? DB.categories[0].id : '');
+  document.getElementById('prod-supplier').value = p.supplierId || '';
   openModal('modal-add-product');
 }
 
@@ -957,6 +1040,7 @@ function saveProduct() {
   const prod = {
     name, sku: document.getElementById('prod-sku').value.trim(),
     catId: +document.getElementById('prod-cat').value || firstCat,
+    supplierId: +document.getElementById('prod-supplier').value || null,
     qty: +document.getElementById('prod-qty').value||0,
     minQty: +document.getElementById('prod-minqty').value||10,
     price: +document.getElementById('prod-price').value||0,
@@ -968,6 +1052,8 @@ function saveProduct() {
     const payload = {
       sku: prod.sku || null,
       name: prod.name,
+      cat_id: prod.catId || null,
+      supplier_id: prod.supplierId || null,
       qty: prod.qty,
       min_qty: prod.minQty,
       price: prod.price,

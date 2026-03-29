@@ -276,7 +276,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 app.get('/api/products', async (_req, res) => {
-  const q = 'products?select=id,sku,name,qty,min_qty,price,unit,location,supplier,description,created_at,updated_at&order=id.asc';
+  const q = 'products?select=id,sku,name,cat_id,supplier_id,qty,min_qty,price,unit,location,supplier,description,created_at,updated_at&order=id.asc';
   const r = await supabaseTableRequest(q, 'GET');
   if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
   return res.json({ ok: true, items: Array.isArray(r.data) ? r.data : [] });
@@ -287,6 +287,8 @@ app.post('/api/products', async (req, res) => {
   const payload = {
     sku: String(b.sku || '').trim() || null,
     name: String(b.name || '').trim(),
+    cat_id: Number(b.cat_id || 0) || null,
+    supplier_id: Number(b.supplier_id || 0) || null,
     qty: Number(b.qty || 0),
     min_qty: Number(b.min_qty || 0),
     price: Number(b.price || 0),
@@ -309,6 +311,8 @@ app.patch('/api/products/:id', async (req, res) => {
   if (b.sku !== undefined) payload.sku = String(b.sku || '').trim() || null;
   if (b.name !== undefined) payload.name = String(b.name || '').trim();
   if (b.qty !== undefined) payload.qty = Number(b.qty || 0);
+  if (b.cat_id !== undefined) payload.cat_id = Number(b.cat_id || 0) || null;
+  if (b.supplier_id !== undefined) payload.supplier_id = Number(b.supplier_id || 0) || null;
   if (b.min_qty !== undefined) payload.min_qty = Number(b.min_qty || 0);
   if (b.price !== undefined) payload.price = Number(b.price || 0);
   if (b.unit !== undefined) payload.unit = String(b.unit || 'шт').trim() || 'шт';
@@ -327,6 +331,92 @@ app.delete('/api/products/:id', async (req, res) => {
   const r = await supabaseTableRequest(`products?id=eq.${id}`, 'DELETE');
   if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
   return res.json({ ok: true });
+});
+
+app.get('/api/categories', async (_req, res) => {
+  const r = await supabaseTableRequest('categories?select=id,name,icon,color,created_at&order=id.asc', 'GET');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, items: Array.isArray(r.data) ? r.data : [] });
+});
+
+app.post('/api/categories', async (req, res) => {
+  const b = req.body || {};
+  const payload = {
+    name: String(b.name || '').trim(),
+    icon: String(b.icon || '').trim() || null,
+    color: String(b.color || '').trim() || null,
+  };
+  if (!payload.name) return res.status(400).json({ ok: false, error: 'Укажите название категории.' });
+  const r = await supabaseTableRequest('categories', 'POST', payload);
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.status(201).json({ ok: true, item: Array.isArray(r.data) ? r.data[0] : r.data });
+});
+
+app.delete('/api/categories/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ ok: false, error: 'Некорректный id.' });
+  const r = await supabaseTableRequest(`categories?id=eq.${id}`, 'DELETE');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true });
+});
+
+app.get('/api/suppliers', async (_req, res) => {
+  const r = await supabaseTableRequest('suppliers?select=id,name,contact,phone,created_at&order=id.asc', 'GET');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, items: Array.isArray(r.data) ? r.data : [] });
+});
+
+app.post('/api/suppliers', async (req, res) => {
+  const b = req.body || {};
+  const payload = {
+    name: String(b.name || '').trim(),
+    contact: String(b.contact || '').trim() || null,
+    phone: String(b.phone || '').trim() || null,
+  };
+  if (!payload.name) return res.status(400).json({ ok: false, error: 'Укажите название поставщика.' });
+  const r = await supabaseTableRequest('suppliers', 'POST', payload);
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.status(201).json({ ok: true, item: Array.isArray(r.data) ? r.data[0] : r.data });
+});
+
+app.get('/api/orders', async (_req, res) => {
+  const q = 'orders?select=id,client,product_id,qty,status,priority,address,note,created_at&order=id.asc';
+  const r = await supabaseTableRequest(q, 'GET');
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, items: Array.isArray(r.data) ? r.data : [] });
+});
+
+app.post('/api/orders', async (req, res) => {
+  const b = req.body || {};
+  const payload = {
+    client: String(b.client || '').trim(),
+    product_id: Number(b.product_id || 0),
+    qty: Number(b.qty || 1),
+    status: String(b.status || 'new').trim() || 'new',
+    priority: String(b.priority || 'normal').trim() || 'normal',
+    address: String(b.address || '').trim() || null,
+    note: String(b.note || '').trim() || null,
+  };
+  if (!payload.client) return res.status(400).json({ ok: false, error: 'Укажите клиента.' });
+  if (!Number.isFinite(payload.product_id) || payload.product_id <= 0) return res.status(400).json({ ok: false, error: 'Укажите товар.' });
+  const r = await supabaseTableRequest('orders', 'POST', payload);
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.status(201).json({ ok: true, item: Array.isArray(r.data) ? r.data[0] : r.data });
+});
+
+app.patch('/api/orders/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) return res.status(400).json({ ok: false, error: 'Некорректный id.' });
+  const b = req.body || {};
+  const payload = {};
+  if (b.status !== undefined) payload.status = String(b.status || '').trim();
+  if (b.priority !== undefined) payload.priority = String(b.priority || '').trim();
+  if (b.address !== undefined) payload.address = String(b.address || '').trim() || null;
+  if (b.note !== undefined) payload.note = String(b.note || '').trim() || null;
+  if (b.qty !== undefined) payload.qty = Number(b.qty || 1);
+  const r = await supabaseTableRequest(`orders?id=eq.${id}`, 'PATCH', payload);
+  if (!r.ok) return res.status(r.status || 500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, item: Array.isArray(r.data) ? r.data[0] : r.data });
 });
 
 app.post('/api/login', async (req, res) => {

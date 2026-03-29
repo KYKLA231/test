@@ -1,4 +1,5 @@
 function renderOrders() {
+  const draw = function () {
   
   const statuses = ['new','processing','shipped','delivered'];
   const counts = {};
@@ -41,6 +42,12 @@ function renderOrders() {
       </div>
     </div>`;
   }).join('');
+  };
+  if (typeof loadOrdersFromServer === 'function' && typeof canUseServerProducts === 'function' && canUseServerProducts()) {
+    Promise.all([loadOrdersFromServer(false), loadProductsFromServer(false)]).finally(draw);
+    return;
+  }
+  draw();
 }
 
 function advanceOrder(id) {
@@ -53,7 +60,28 @@ function advanceOrder(id) {
   const next = {new:'processing', processing:'shipped', shipped:'delivered'};
   const label = {processing:'В обработку', shipped:'Отправить', delivered:'Доставлен'}[next[order.status]]||'';
   if(!next[order.status]) return;
-  order.status = next[order.status];
+  const newStatus = next[order.status];
+  if (typeof canUseServerProducts === 'function' && canUseServerProducts()) {
+    fetch(skladApiBase() + '/api/orders/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    })
+      .then(r => r.json().catch(() => null).then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        if (!ok || !j || !j.ok) {
+          showToast((j && j.error) ? j.error : 'Ошибка обновления заказа', 'error');
+          return;
+        }
+        if (typeof __ordersServerSync !== 'undefined') __ordersServerSync.loaded = false;
+        addAudit(`Заказ #${id} — статус изменён на «${newStatus}»`,'order');
+        renderOrders();
+        showToast(`Заказ #${id} переведён: ${newStatus}`, 'success');
+      })
+      .catch(() => showToast('Ошибка обновления заказа', 'error'));
+    return;
+  }
+  order.status = newStatus;
   addAudit(`Заказ #${id} — статус изменён на «${order.status}»`,'order');
   saveDB(); renderOrders();
   showToast(`Заказ #${id} переведён: ${order.status}`, 'success');
@@ -86,6 +114,37 @@ function saveOrder() {
     note: document.getElementById('ord-note').value,
     status: 'new', createdAt: new Date().toLocaleString('ru')
   };
+  if (typeof canUseServerProducts === 'function' && canUseServerProducts()) {
+    fetch(skladApiBase() + '/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client: order.client,
+        product_id: order.productId,
+        qty: order.qty,
+        status: order.status,
+        priority: order.priority,
+        address: order.address,
+        note: order.note
+      })
+    })
+      .then(r => r.json().catch(() => null).then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        if (!ok || !j || !j.ok) {
+          showToast((j && j.error) ? j.error : 'Ошибка создания заказа', 'error');
+          return;
+        }
+        if (typeof __ordersServerSync !== 'undefined') __ordersServerSync.loaded = false;
+        addAudit(`Создан заказ для «${client}»`,'order');
+        addNotification(`Новый заказ от ${client}`, 'info');
+        closeModal('modal-add-order');
+        document.getElementById('ord-client').value='';
+        renderOrders();
+        showToast('Заказ создан','success');
+      })
+      .catch(() => showToast('Ошибка создания заказа','error'));
+    return;
+  }
   DB.orders.push(order);
   addAudit(`Создан заказ для «${client}»`,'order');
   addNotification(`Новый заказ от ${client}`, 'info');

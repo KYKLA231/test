@@ -11,7 +11,8 @@ function renderAudit() {
 }
 function renderUsers() {
   const grid = document.getElementById('users-grid');
-  grid.innerHTML = DB.users.map(u=>{
+  const users = (currentUser ? [currentUser] : []);
+  grid.innerHTML = users.map(u=>{
     const roleLabels={admin:'Администратор',manager:'Менеджер',worker:'Работник склада'};
     const roleCls={admin:'role-admin',manager:'role-manager',worker:'role-worker'};
     return `<div class="card">
@@ -30,10 +31,7 @@ function renderUsers() {
         </div>
         <div style="display:flex;gap:6px;align-items:center;justify-content:space-between">
           <span class="badge ${u.active?'badge-green':'badge-red'}">${u.active?'Активен':'Заблокирован'}</span>
-          ${currentUser.role==='admin'&&u.id!==currentUser.id?`<div style="display:flex;gap:4px">
-            <button class="btn btn-sm btn-secondary" onclick="toggleUser(${u.id})">${u.active?'Блок':'Разблок'}</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})" title="Удалить">Уд.</button>
-          </div>`:''}
+          <div style="font-size:11px;color:var(--text-2);font-family:var(--font-mono)">Управление ролями через Supabase profiles</div>
         </div>
       </div>
     </div>`;
@@ -63,29 +61,8 @@ function deleteUser(id) {
 }
 
 function saveUser() {
-  if(currentUser?.active === false) {
-    showToast('Вы заблокированы, обратитесь к администратору','error');
-    return;
-  }
-  const name=document.getElementById('usr-name').value.trim();
-  const login=document.getElementById('usr-login').value.trim();
-  const pass=document.getElementById('usr-pass').value;
-  if(!name||!login||!pass) { showToast('Заполните обязательные поля','error'); return; }
-  if(DB.users.find(u=>u.login===login)) { showToast('Логин уже занят','error'); return; }
-  const user = {
-    id: Date.now(), name, login, pass,
-    role: document.getElementById('usr-role').value,
-    email: document.getElementById('usr-email').value,
-    phone: document.getElementById('usr-phone').value,
-    active: true, avatar: name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
-  };
-  DB.users.push(user);
-  addAudit(`Добавлен пользователь ${name}`,'create');
-  saveDB(); closeModal('modal-add-user'); renderUsers();
-  document.getElementById('usr-name').value='';
-  document.getElementById('usr-login').value='';
-  document.getElementById('usr-pass').value='';
-  showToast('Пользователь добавлен','success');
+  showToast('Пользователей создавайте через регистрацию и меняйте роль в Supabase profiles.', 'info');
+  closeModal('modal-add-user');
 }
 
 function renderNotifications() {

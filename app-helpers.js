@@ -1,9 +1,12 @@
 function updateCategorySelects() {
   const prodCatSel = document.getElementById('prod-cat');
   const prodCatFilter = document.getElementById('prod-cat-filter');
+  const prodSupplier = document.getElementById('prod-supplier');
   const opts = DB.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  const supOpts = DB.suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   if(prodCatSel) prodCatSel.innerHTML = opts;
   if(prodCatFilter) prodCatFilter.innerHTML = `<option value="">Все категории</option>${opts}`;
+  if(prodSupplier) prodSupplier.innerHTML = `<option value="">Не указан</option>${supOpts}`;
 }
 
 function formatPrice(n) {
